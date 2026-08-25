@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.zip
+dist/
+build/
+.venv/
+*.blend1
+tests/_out/
+.DS_Store
+.ruff_cache/
+
+# Claude Code
+.claude/
+CLAUDE.md
+.mcp.json

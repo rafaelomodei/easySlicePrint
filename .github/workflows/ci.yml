@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: check .
+      - uses: astral-sh/ruff-action@v3
+        with:
+          args: format --check .
+
+  test:
+    name: Blender ${{ matrix.blender }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - blender: "4.2.23"
+            series: "4.2"
+          - blender: "5.2.1"
+            series: "5.2"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Blender
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/blender-${{ matrix.blender }}
+          key: blender-${{ matrix.blender }}-linux-x64
+
+      - name: Download Blender
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          url="https://download.blender.org/release/Blender${{ matrix.series }}/blender-${{ matrix.blender }}-linux-x64.tar.xz"
+          mkdir -p ~/blender-${{ matrix.blender }}
+          curl -sSL "$url" | tar -xJ -C ~/blender-${{ matrix.blender }} --strip-components=1
+
+      - name: Install runtime libs
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libglu1-mesa libsm6 libxkbcommon0 > /dev/null
+
+      - name: Run headless tests
+        env:
+          BLENDER: ~/blender-${{ matrix.blender }}/blender
+        run: |
+          BLENDER=$(eval echo "$BLENDER")
+          "$BLENDER" --version | head -1
+          BLENDER="$BLENDER" scripts/run_tests.sh
+
+      - name: Build & validate extension
+        env:
+          BLENDER: ~/blender-${{ matrix.blender }}/blender
+        run: BLENDER=$(eval echo "$BLENDER") scripts/build.sh
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: easy_slice_print-blender${{ matrix.blender }}
+          path: dist/*.zip
+          if-no-files-found: error

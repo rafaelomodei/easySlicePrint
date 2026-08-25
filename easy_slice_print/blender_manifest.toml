@@ -1,0 +1,20 @@
+schema_version = "1.0.0"
+
+id = "easy_slice_print"
+version = "0.1.0"
+name = "EasySlice Print"
+tagline = "Slice models into printable parts with matching pins and sockets"
+maintainer = "Rafael Omodei"
+type = "add-on"
+
+website = "https://github.com/rafaelomodei/easySlicePrint"
+tags = ["Mesh", "Object", "3D View"]
+
+blender_version_min = "4.2.0"
+
+# Open source, free to use/modify/contribute, but NOT for commercial use/resale.
+license = ["SPDX:PolyForm-Noncommercial-1.0.0"]
+copyright = ["2026 Rafael Omodei and EasySlice Print contributors"]
+
+[permissions]
+files = "Export parts to STL/OBJ/FBX files in a folder you choose"

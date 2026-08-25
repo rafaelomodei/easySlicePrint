@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches manifest version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(grep -E '^version *= *"' easy_slice_print/blender_manifest.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "tag=$tag manifest=$manifest"
+          test "$tag" = "$manifest"
+
+      - name: Download Blender
+        run: |
+          mkdir -p ~/blender
+          curl -sSL "https://download.blender.org/release/Blender5.2/blender-5.2.1-linux-x64.tar.xz" | tar -xJ -C ~/blender --strip-components=1
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libglu1-mesa libsm6 libxkbcommon0 > /dev/null
+
+      - name: Test
+        run: BLENDER=~/blender/blender scripts/run_tests.sh
+
+      - name: Build
+        run: BLENDER=~/blender/blender scripts/build.sh
+
+      - name: Extract changelog section
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v ver="$ver" '/^## /{p = index($0, "[" ver "]") || index($0, " " ver " ")} p' CHANGELOG.md > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          body_path: RELEASE_NOTES.md
+          generate_release_notes: true

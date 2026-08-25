@@ -1,0 +1,45 @@
+name: Bug report
+description: Something is wrong (a cut fails, a crash, a wrong result)
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please check that the model is a **closed, manifold mesh** with **applied scale/rotation** first — most wrong cuts come from broken geometry.
+  - type: input
+    id: versions
+    attributes:
+      label: Blender / EasySlice versions
+      placeholder: "Blender 5.2.1 LTS, EasySlice Print 0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, macOS, Linux]
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode and tool
+      options: [Quick Cut - Plane, Quick Cut - Curve, Quick Cut - Freehand, Plan Mode - Plane, Plan Mode - Curve, Plan Mode - Freehand, Two contacts / Base split, Export, Other]
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, what you expected, what you got. Screenshots or a short screen recording help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: mesh
+    attributes:
+      label: Model info
+      description: Polygon count, whether *Check Mesh* reports it as manifold, scene units. Attach a small .blend that reproduces the problem if you can.
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: Window > Toggle System Console (Windows) or run Blender from a terminal, then paste any error here.
+      render: text

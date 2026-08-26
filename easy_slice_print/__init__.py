@@ -1,6 +1,8 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """EasySlice Print - slice models into printable parts with matching pins and sockets.
 
-Free and open source under the PolyForm Noncommercial License 1.0.0.
+Free software under the GNU General Public License v3.0 or later.
 """
 
 from . import ops_misc, ops_plan, ops_tools, plan, prefs, props, ui

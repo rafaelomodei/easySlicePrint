@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """Plan mode operators: manage records, edit surfaces, build/approve."""
 
 import time

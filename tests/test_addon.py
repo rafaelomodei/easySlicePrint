@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """Headless add-on tests: registration, plan workflow, build/return/approve, explode, export, panel drawing.
 Run:  blender -b --python tests/test_addon.py
 """

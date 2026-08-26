@@ -3,7 +3,7 @@ schema_version = "1.0.0"
 id = "easy_slice_print"
 version = "0.1.0"
 name = "EasySlice Print"
-tagline = "Slice models into printable parts with matching pins and sockets"
+tagline = "Non-destructive model splitting and connectors for 3D printing"
 maintainer = "Rafael Omodei"
 type = "add-on"
 
@@ -12,8 +12,7 @@ tags = ["Mesh", "Object", "3D View"]
 
 blender_version_min = "4.2.0"
 
-# Open source, free to use/modify/contribute, but NOT for commercial use/resale.
-license = ["SPDX:PolyForm-Noncommercial-1.0.0"]
+license = ["SPDX:GPL-3.0-or-later"]
 copyright = ["2026 Rafael Omodei and EasySlice Print contributors"]
 
 [permissions]

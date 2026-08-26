@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """Small GPU drawing helpers for the modal tools (region pixel space)."""
 
 import gpu

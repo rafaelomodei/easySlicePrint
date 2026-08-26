@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """Scene level settings and the planned-cut records."""
 
 import bpy

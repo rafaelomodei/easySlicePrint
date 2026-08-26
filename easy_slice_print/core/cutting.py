@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """High level cut pipeline: split a mesh by one or two cut surfaces, add
 connectors, optional remesh, create the result objects."""
 

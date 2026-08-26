@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """Cut surfaces ("patches") and the kerf slab built from them.
 
 A patch is a simple open mesh given as (verts, faces) in world space:

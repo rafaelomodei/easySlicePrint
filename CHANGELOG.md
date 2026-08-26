@@ -18,6 +18,7 @@ All notable changes to this project are documented here. The format follows
 - Cut gap (kerf), Keep Original, Skip Failed Cuts, optional voxel remesh.
 - Exploded view and one-click STL / OBJ / FBX export in millimetres.
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
+- Released as free software under the GNU GPL v3.0 or later.
 
 [Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/rafaelomodei/easySlicePrint/releases/tag/v0.1.0

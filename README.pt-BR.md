@@ -1,13 +1,45 @@
-# EasySlice Print
+<h1 align="center">EasySlice Print</h1>
 
-[![CI](https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml/badge.svg)](https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/rafaelomodei/easySlicePrint?include_prereleases)](https://github.com/rafaelomodei/easySlicePrint/releases)
-![Blender 4.2 – 5.2](https://img.shields.io/badge/Blender-4.2%20%E2%80%93%205.2-orange)
-![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20NC%201.0.0-blue)
+<p align="center">
+  <strong>Corte. Encaixe. Imprima.</strong><br>
+  Divisão não destrutiva de modelos e conectores personalizados para impressão 3D — add-on gratuito para Blender.
+</p>
 
-**Slice. Join. Print.** — add-on gratuito e open source para Blender que divide modelos 3D em
-peças imprimíveis, cria **pinos e encaixes** correspondentes e exporta as peças para impressão em
-resina ou FDM.
+<p align="center">
+  <a href="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/rafaelomodei/easySlicePrint/releases"><img alt="Release" src="https://img.shields.io/github/v/release/rafaelomodei/easySlicePrint?include_prereleases"></a>
+  <img alt="Blender 4.2 – 5.2" src="https://img.shields.io/badge/Blender-4.2%20%E2%80%93%205.2-orange">
+  <a href="LICENSE"><img alt="Licença: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue"></a>
+  <a href="CODE_OF_CONDUCT.md"><img alt="Código de Conduta" src="https://img.shields.io/badge/code%20of%20conduct-Contributor%20Covenant%202.1-purple"></a>
+</p>
+
+<p align="center">
+  <em>English: see <a href="README.md">README.md</a></em>
+</p>
+
+<!-- TODO(media): grave a demo, coloque os arquivos em docs/media/ e descomente.
+     A lista de capturas está em docs/media/README.md.
+<p align="center"><img src="docs/media/demo.gif" alt="Demonstração do EasySlice Print" width="720"></p>
+-->
+
+|  |  |
+|---|---|
+| ✂️ **Corte qualquer modelo** | plano, curva ou laço livre — não só planos retos |
+| 🔩 **Pinos e encaixes automáticos** | formas prontas ou suas próprias malhas de conector |
+| 🧩 **Planeje vários cortes** | não destrutivo: edite, mova, desative, reconstrua — o original nunca é tocado |
+| 🖨️ **Exporte peças prontas** | um STL/OBJ/FBX por peça, em milímetros |
+
+```
+1. Desenhe o corte  →  2. Gere os conectores  →  3. Exporte as peças
+```
+
+<!-- TODO(media): descomente quando docs/media/step-*.png existirem.
+<p align="center">
+  <img src="docs/media/step-1-cut.png" width="30%">
+  <img src="docs/media/step-2-connectors.png" width="30%">
+  <img src="docs/media/step-3-export.png" width="30%">
+</p>
+-->
 
 ## Recursos
 
@@ -29,7 +61,7 @@ Testado headless no Blender 4.2.23 LTS e 5.2.1 LTS (o CI roda os dois). Funciona
 
 ## Instalação
 
-1. Baixe `easy_slice_print-<versão>.zip` (releases) ou gere com `scripts/build.sh`.
+1. Baixe `easy_slice_print-<versão>.zip` nas [releases](https://github.com/rafaelomodei/easySlicePrint/releases) ou gere com `scripts/build.sh`.
 2. Blender → *Edit → Preferences → Add-ons → ⌄ (canto superior direito) → Install from Disk…* → escolha o zip.
 3. Ative **EasySlice Print**. O painel fica na sidebar do 3D Viewport (`N`) → aba **EasySlice**.
 
@@ -79,12 +111,9 @@ Contribuições são bem-vindas — leia [CONTRIBUTING.md](CONTRIBUTING.md) e o 
 
 ## Licença
 
-**PolyForm Noncommercial License 1.0.0** — livre para usar, estudar, modificar e compartilhar,
-inclusive contribuir, **mas não para fins comerciais** (não pode vender, embutir em produto pago nem
-prestar serviço comercial com ele). Veja [LICENSE](LICENSE).
-
-> Observação: a plataforma oficial de extensões do Blender só aceita licenças compatíveis com a GPL;
-> por isso o add-on é distribuído aqui (releases / Install from Disk) e não em extensions.blender.org.
+**GNU General Public License v3.0 ou posterior** (`GPL-3.0-or-later`) — livre para usar, estudar,
+modificar e compartilhar, inclusive comercialmente, desde que os trabalhos derivados permaneçam sob
+a mesma licença. Veja [LICENSE](LICENSE).
 
 O EasySlice Print é um projeto independente. Não é afiliado, endossado nem derivado de nenhum add-on
 comercial; nenhum código ou asset de terceiros está incluído.

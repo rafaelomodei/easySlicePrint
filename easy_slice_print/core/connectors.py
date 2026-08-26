@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """Connector (pin/socket) shapes.
 
 Every connector is a *unit* mesh: it fits in x,y in [-0.5, 0.5] and spans

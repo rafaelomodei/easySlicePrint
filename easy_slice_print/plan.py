@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """Plan (draft) records, preview objects and the glue between records and the
 core cut pipeline."""
 

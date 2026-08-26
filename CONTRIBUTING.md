@@ -1,7 +1,7 @@
 # Contributing to EasySlice Print
 
-Thanks for helping! EasySlice Print is free and open source under the
-[PolyForm Noncommercial License 1.0.0](LICENSE). By contributing you agree that your contribution
+Thanks for helping! EasySlice Print is free software under the
+[GNU GPL v3.0 or later](LICENSE). By contributing you agree that your contribution
 is licensed under the same terms, and to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Ways to help

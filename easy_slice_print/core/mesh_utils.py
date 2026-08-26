@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """Low level mesh helpers: temp objects, booleans, loose parts, centroids."""
 
 import bmesh

@@ -1,15 +1,45 @@
-# EasySlice Print
+<h1 align="center">EasySlice Print</h1>
 
-**Slice. Join. Print.** — a free, open-source Blender add-on that splits 3D models into
-printable parts, adds matching **pins and sockets**, and exports the parts for resin or FDM printing.
+<p align="center">
+  <strong>Cut. Connect. Print.</strong><br>
+  Non-destructive model splitting and custom connectors for 3D printing — a free Blender add-on.
+</p>
 
-> Português: veja [README.pt-BR.md](README.pt-BR.md)
+<p align="center">
+  <a href="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/rafaelomodei/easySlicePrint/releases"><img alt="Release" src="https://img.shields.io/github/v/release/rafaelomodei/easySlicePrint?include_prereleases"></a>
+  <img alt="Blender 4.2 – 5.2" src="https://img.shields.io/badge/Blender-4.2%20%E2%80%93%205.2-orange">
+  <a href="LICENSE"><img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue"></a>
+  <a href="CODE_OF_CONDUCT.md"><img alt="Code of Conduct" src="https://img.shields.io/badge/code%20of%20conduct-Contributor%20Covenant%202.1-purple"></a>
+</p>
 
-[![CI](https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml/badge.svg)](https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/rafaelomodei/easySlicePrint?include_prereleases)](https://github.com/rafaelomodei/easySlicePrint/releases)
-![Blender 4.2 – 5.2](https://img.shields.io/badge/Blender-4.2%20%E2%80%93%205.2-orange)
-![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20NC%201.0.0-blue)
-[![Code of Conduct](https://img.shields.io/badge/code%20of%20conduct-Contributor%20Covenant%202.1-purple)](CODE_OF_CONDUCT.md)
+<p align="center">
+  <em>Português: veja <a href="README.pt-BR.md">README.pt-BR.md</a></em>
+</p>
+
+<!-- TODO(media): record the demo and drop the files in docs/media/, then uncomment.
+     See docs/media/README.md for the exact shot list.
+<p align="center"><img src="docs/media/demo.gif" alt="EasySlice Print demo" width="720"></p>
+-->
+
+|  |  |
+|---|---|
+| ✂️ **Cut any model** | plane, curve or freehand loop — not just flat planes |
+| 🔩 **Automatic pins & sockets** | built-in shapes or your own connector meshes |
+| 🧩 **Plan several cuts** | non-destructive: edit, move, disable, rebuild — the original is never touched |
+| 🖨️ **Export ready-to-print parts** | one STL/OBJ/FBX per part, in millimetres |
+
+```
+1. Draw the cut  →  2. Generate connectors  →  3. Export printable parts
+```
+
+<!-- TODO(media): uncomment once docs/media/step-*.png exist.
+<p align="center">
+  <img src="docs/media/step-1-cut.png" width="30%">
+  <img src="docs/media/step-2-connectors.png" width="30%">
+  <img src="docs/media/step-3-export.png" width="30%">
+</p>
+-->
 
 ## Features
 
@@ -31,7 +61,7 @@ Tested headless on Blender 4.2.23 LTS and 5.2.1 LTS (CI runs both). Works on Win
 
 ## Install
 
-1. Download `easy_slice_print-<version>.zip` from the releases (or build it, see below).
+1. Download `easy_slice_print-<version>.zip` from the [releases](https://github.com/rafaelomodei/easySlicePrint/releases) (or build it, see below).
 2. Blender → *Edit → Preferences → Add-ons → ⌄ (top right) → Install from Disk…* → pick the zip.
 3. Enable **EasySlice Print**. The panel lives in the 3D Viewport sidebar (`N`) → **EasySlice** tab.
 
@@ -89,12 +119,8 @@ Security issues: see [SECURITY.md](SECURITY.md).
 
 ## License
 
-**PolyForm Noncommercial License 1.0.0** — free to use, study, modify and share, including
-contributing back, **but not for commercial purposes** (no selling, no bundling in paid products, no
-commercial services). See [LICENSE](LICENSE).
-
-> Note: Blender's official Extensions platform only accepts GPL-compatible licenses, so this add-on is
-> distributed here (GitHub releases / Install from Disk) rather than on extensions.blender.org.
+**GNU General Public License v3.0 or later** (`GPL-3.0-or-later`) — free to use, study, modify and
+share, including commercially, as long as derivative works stay under the same license. See [LICENSE](LICENSE).
 
 EasySlice Print is an independent project. It is not affiliated with, endorsed by or derived from any
 commercial add-on; no third-party code or assets are included.

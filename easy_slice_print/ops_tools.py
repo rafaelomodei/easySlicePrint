@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """Interactive cut tools (modal operators): plane, curve and freehand cuts."""
 
 import math

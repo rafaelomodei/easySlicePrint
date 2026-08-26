@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 """Sidebar panels (3D Viewport > N panel > EasySlice tab)."""
 
 import bpy

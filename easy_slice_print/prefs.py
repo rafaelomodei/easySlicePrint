@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 import bpy
 from bpy.props import BoolProperty, EnumProperty
 
@@ -43,8 +45,8 @@ class ESP_Preferences(bpy.types.AddonPreferences):
         layout.prop(self, "unit_mode")
         layout.prop(self, "check_mesh")
         box = layout.box()
-        box.label(text="EasySlice Print is free and open source (PolyForm Noncommercial 1.0.0).", icon='INFO')
-        box.label(text="Use it, modify it and contribute - but it may not be sold or used commercially.")
+        box.label(text="EasySlice Print is free software (GNU GPL v3.0 or later).", icon='INFO')
+        box.label(text="Use it, study it, modify it and share it - contributions welcome.")
 
 
 def register():

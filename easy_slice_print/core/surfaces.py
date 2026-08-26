@@ -3,9 +3,11 @@
 """Cut surfaces ("patches") and the kerf slab built from them.
 
 A patch is a simple open mesh given as (verts, faces) in world space:
-  * plane_patch   -> straight cut (one quad)
+  * rect_patch    -> straight cut: one quad, sized independently on each axis
+  * plane_patch   -> square special case of rect_patch
   * ribbon_patch  -> curved cut: the stroke extruded along the view direction
   * loop_patch    -> freehand cut: a closed loop drawn on the surface, filled
+                     (planar loops as an n-gon, wrap-around loops as a centroid fan)
 
 `slab_from_patch` thickens a patch by the cut gap (kerf) into a closed solid
 that is subtracted from the model with a boolean.
@@ -108,8 +110,14 @@ def plane_basis(normal):
 # ----------------------------------------------------------------------------
 # patches
 # ----------------------------------------------------------------------------
-def plane_patch(center, normal, u_dir, size):
-    """One quad of `size` x `size` centred on `center`, face normal == `normal`."""
+def rect_patch(center, normal, u_dir, half_u, v_range):
+    """One quad on the plane (`center`, `normal`).
+
+    Spans +-`half_u` along `u_dir` and `v_range` = (v0, v1) along `normal` x `u_dir`,
+    both measured from `center`. Keeping the two axes independent is what lets a cut
+    surface be exactly as wide as the stroke that was drawn while still reaching all
+    the way through the model in depth.
+    """
     n = Vector(normal).normalized()
     u = Vector(u_dir)
     u = u - n * u.dot(n)
@@ -117,10 +125,17 @@ def plane_patch(center, normal, u_dir, size):
         u, _ = plane_basis(n)
     u.normalize()
     v = n.cross(u).normalized()
-    h = size * 0.5
     c = Vector(center)
-    verts = [c - u * h - v * h, c + u * h - v * h, c + u * h + v * h, c - u * h + v * h]
+    a = c + v * v_range[0]
+    b = c + v * v_range[1]
+    verts = [a - u * half_u, a + u * half_u, b + u * half_u, b - u * half_u]
     return verts, [(0, 1, 2, 3)]
+
+
+def plane_patch(center, normal, u_dir, size):
+    """One quad of `size` x `size` centred on `center`, face normal == `normal`."""
+    h = size * 0.5
+    return rect_patch(center, normal, u_dir, h, (-h, h))
 
 
 def ribbon_patch(points, view_dir, depth, extend, depth_range=None):
@@ -153,11 +168,40 @@ def ribbon_patch(points, view_dir, depth, extend, depth_range=None):
     return verts, faces
 
 
-def loop_patch(points):
-    """Fill a closed loop with triangles. Returns (verts, faces)."""
+def loop_flatness(points):
+    """Max distance from the loop's own best fit plane, relative to the loop radius."""
+    pts = [Vector(p) for p in points]
+    c = sum(pts, Vector((0.0, 0.0, 0.0))) / len(pts)
+    radius = max((p - c).length for p in pts)
+    if radius < 1e-12:
+        return 0.0
+    n = newell_normal(pts)
+    return max(abs((p - c).dot(n)) for p in pts) / radius
+
+
+def fan_patch(points):
+    """Triangle fan from the loop centroid: keeps well shaped triangles on any loop."""
+    pts = [Vector(p) for p in points]
+    c = sum(pts, Vector((0.0, 0.0, 0.0))) / len(pts)
+    m = len(pts)
+    verts = pts + [c]
+    faces = [(i, (i + 1) % m, m) for i in range(m)]
+    return verts, faces
+
+
+def loop_patch(points, flat_tol=0.2):
+    """Fill a closed loop with triangles. Returns (verts, faces).
+
+    A loop drawn from a single viewpoint stays near a plane and is filled as one
+    n-gon. A loop drawn while orbiting - front, far side, back to the front - is
+    strongly non planar; the n-gon fill degenerates into slivers there, so those
+    are filled with a fan from the loop centroid instead.
+    """
     pts = [Vector(p) for p in points]
     if len(pts) < 3:
         raise ValueError("loop needs at least 3 points")
+    if loop_flatness(pts) > flat_tol:
+        return fan_patch(pts)
     bm = bmesh.new()
     bverts = [bm.verts.new(p) for p in pts]
     try:

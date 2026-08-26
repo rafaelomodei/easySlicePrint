@@ -55,6 +55,13 @@ def dist2d(a, b):
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
 
+def sample_segment(p0, p1, count):
+    """`count` evenly spaced 2D points from p0 to p1, both ends included."""
+    return [
+        (p0[0] + (p1[0] - p0[0]) * i / (count - 1), p0[1] + (p1[1] - p0[1]) * i / (count - 1)) for i in range(count)
+    ]
+
+
 def schedule_chain(idname, window, area):
     """Start the same tool again after the current one finished (Chain Cuts)."""
 
@@ -150,6 +157,7 @@ class CutToolBase:
         self.click_mode = False
         self.loop = []
         self.loop2d = []
+        self.view_at_press = None
 
     def end(self, context):
         if getattr(self, "_handle", None) is not None:
@@ -165,6 +173,17 @@ class CutToolBase:
     def coord(self, event):
         return (event.mouse_x - self.region.x, event.mouse_y - self.region.y)
 
+    def nav_drag(self, context, event):
+        """With 'Emulate 3 Button Mouse' on, Alt+LMB is orbit - give it to the view."""
+        return event.alt and context.preferences.inputs.use_mouse_emulate_3_button
+
+    def view_key(self):
+        """Fingerprint of the current view, to detect an orbit in the middle of a stroke."""
+        return tuple(round(v, 5) for row in self.rv3d.view_matrix for v in row)
+
+    def view_moved(self):
+        return self.view_at_press is not None and self.view_key() != self.view_at_press
+
     def modal(self, context, event):
         self.mouse = self.coord(event)
         if event.type in NAV_EVENTS:
@@ -177,12 +196,16 @@ class CutToolBase:
         if event.type in {'RET', 'NUMPAD_ENTER'} and event.value == 'PRESS':
             result = self.on_confirm(context)
         elif event.type == 'LEFTMOUSE':
+            if self.nav_drag(context, event):
+                return {'PASS_THROUGH'}
             if event.value == 'PRESS':
                 result = self.on_press(context, self.mouse)
             elif event.value == 'RELEASE':
                 result = self.on_release(context, self.mouse)
         elif event.type == 'MOUSEMOVE':
             result = self.on_move(context, self.mouse)
+        elif event.value == 'PRESS':
+            result = self.on_key(context, event)
         self.area.tag_redraw()
         if result is not None:
             return result
@@ -211,6 +234,38 @@ class CutToolBase:
 
     def to2d(self, world):
         return view3d_utils.location_3d_to_region_2d(self.region, self.rv3d, world)
+
+    # -- patch sizing ---------------------------------------------------------
+    def surface_margin(self, context, span):
+        """How far the patch may reach past the drawn region (a fraction of it)."""
+        return max(span * context.scene.esp.surface_margin, self.diag * 0.002)
+
+    def model_span(self, context, samples2d, ref, axis):
+        """Extent of the model along `axis`, measured under the drawn stroke.
+
+        Every crossing of the model is collected along the view ray at each sample,
+        so the cut surface only spans the depth the model actually occupies where it
+        was drawn - not the whole bounding box. -> (min, max) or None if nothing hit.
+        """
+        depsgraph = context.evaluated_depsgraph_get()
+        eps = self.diag * 1e-4
+        lo = hi = None
+        for c in samples2d:
+            origin = view3d_utils.region_2d_to_origin_3d(self.region, self.rv3d, c)
+            d = self.view_dir(c)
+            for dist in mesh_utils.object_ray_hits(self.target, origin, d, eps, depsgraph, max_dist=self.diag * 4.0):
+                t = (origin + d * dist - ref).dot(axis)
+                lo = t if lo is None else min(lo, t)
+                hi = t if hi is None else max(hi, t)
+        return None if lo is None else (lo, hi)
+
+    def bbox_span(self, ref, axis):
+        """Fallback for a stroke drawn off the model: the whole bounding box."""
+        mn, mx = mesh_utils.object_world_bounds(self.target)
+        ts = [
+            (Vector((cx, cy, cz)) - ref).dot(axis) for cx in (mn.x, mx.x) for cy in (mn.y, mx.y) for cz in (mn.z, mx.z)
+        ]
+        return min(ts), max(ts)
 
     def contact_label(self):
         if self.contacts_needed == 1:
@@ -264,6 +319,9 @@ class CutToolBase:
     def on_confirm(self, context):
         return None
 
+    def on_key(self, context, event):
+        return None
+
     def draw(self, context):
         pass
 
@@ -292,6 +350,7 @@ class ESP_OT_cut_straight(CutToolBase, bpy.types.Operator):
             return self.make_contact(context, self.start2d, c)
         self.start2d = c
         self.drawing = True
+        self.view_at_press = self.view_key()
         return None
 
     def on_release(self, context, c):
@@ -304,6 +363,10 @@ class ESP_OT_cut_straight(CutToolBase, bpy.types.Operator):
         return self.make_contact(context, self.start2d, c)
 
     def make_contact(self, context, p0, p1):
+        if self.view_moved():
+            self.reset_stroke()
+            self.report({'WARNING'}, "View orbited mid-stroke - draw the plane cut from a single view")
+            return None
         q0 = self.at_depth(p0, self.bcenter)
         q1 = self.at_depth(p1, self.bcenter)
         mid = ((p0[0] + p1[0]) * 0.5, (p0[1] + p1[1]) * 0.5)
@@ -315,9 +378,16 @@ class ESP_OT_cut_straight(CutToolBase, bpy.types.Operator):
         n = u.cross(d).normalized()
         if n.z < -1e-6 or (abs(n.z) <= 1e-6 and n.x < 0):
             n = -n
-        c = self.bcenter - n * (self.bcenter - q0).dot(n)
+        # the patch is built around the drawn segment, not around the model: as wide as
+        # the line, and only as deep as the model reaches underneath it
+        c = (q0 + q1) * 0.5
+        margin = self.surface_margin(context, u.length)
+        depth_axis = n.cross(u.normalized()).normalized()
+        span = self.model_span(context, sample_segment(p0, p1, 17), c, depth_axis) or self.bbox_span(c, depth_axis)
         data = plan.ContactData('STRAIGHT')
-        data.verts, data.faces = surfaces.plane_patch(c, n, u, self.diag * 1.3)
+        data.verts, data.faces = surfaces.rect_patch(
+            c, n, u, u.length * 0.5 + margin, (span[0] - margin, span[1] + margin)
+        )
         data.view_dir = d
         hit, loc, _nor, _dist = self.cast(context, mid)
         if hit:
@@ -352,6 +422,7 @@ class ESP_OT_cut_curved(CutToolBase, bpy.types.Operator):
     def on_press(self, context, c):
         self.stroke = [c]
         self.drawing = True
+        self.view_at_press = self.view_key()
         return None
 
     def on_move(self, context, c):
@@ -369,6 +440,10 @@ class ESP_OT_cut_curved(CutToolBase, bpy.types.Operator):
         return self.make_contact(context, self.stroke)
 
     def make_contact(self, context, stroke):
+        if self.view_moved():
+            self.reset_stroke()
+            self.report({'WARNING'}, "View orbited mid-stroke - draw the curve from a single view")
+            return None
         settings = context.scene.esp
         pts = []
         hits = []
@@ -394,20 +469,17 @@ class ESP_OT_cut_curved(CutToolBase, bpy.types.Operator):
             avg += (pts[i + 1] - pts[i]).cross(d)
         if avg.z < -1e-6 or (abs(avg.z) <= 1e-6 and avg.x < 0):
             pts.reverse()
-        # depth range: cover the whole model along the view direction
-        mn, mx = mesh_utils.object_world_bounds(self.target)
+        # depth range: only as deep as the model reaches under the stroke, and the ends
+        # reach just past it - not half a bounding diagonal in every direction
         mean = sum(pts, Vector((0.0, 0.0, 0.0))) / len(pts)
-        ts = []
-        for cx in (mn.x, mx.x):
-            for cy in (mn.y, mx.y):
-                for cz in (mn.z, mx.z):
-                    ts.append((Vector((cx, cy, cz)) - mean).dot(d))
-        margin = self.diag * 0.05
+        margin = self.surface_margin(context, surfaces.polyline_length(pts))
+        step = max(1, len(stroke) // 24)
+        span = self.model_span(context, stroke[::step], mean, d) or self.bbox_span(mean, d)
         data = plan.ContactData('CURVED')
         data.points = pts
         data.view_dir = d
-        data.depth_range = (min(ts) - margin, max(ts) + margin)
-        data.extend = self.diag * 0.5
+        data.depth_range = (span[0] - margin, span[1] + margin)
+        data.extend = margin
         data.verts, data.faces = surfaces.ribbon_patch(pts, d, 0.0, data.extend, depth_range=data.depth_range)
         if hits:
             mid_i = len(stroke) // 2
@@ -432,21 +504,60 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
     bl_idname = "esp.cut_freehand"
     bl_label = "Freehand Cut"
     bl_description = (
-        "Draw a closed loop on the model surface (several strokes allowed, orbit with MMB); "
-        "the loop is filled and used as the cut surface"
+        "Draw a closed loop on the model surface. Release the button, orbit with MMB to reach "
+        "the far side, then keep drawing: the loop is filled and used as the cut surface"
     )
     kind = 'FREEHAND'
     CLOSE_PX = 12.0
+    MIN_STROKE = 3  # samples the current stroke must have before it may snap the loop closed
+
+    def reset_stroke(self):
+        CutToolBase.reset_stroke(self)
+        self.breaks = set()  # loop indices where a new stroke (usually a new view) starts
+        self.stroke_start = 0
 
     def status_text(self):
-        return "LMB draw on the surface | release to pause | return to the green start (or Enter) to close the loop"
+        return (
+            "LMB draw on the surface | release + MMB orbit to reach the far side, then draw again | "
+            "green start / Enter / C: close | Ctrl+Z: undo stroke"
+        )
 
     def header_text(self):
-        n = len(self.loop)
-        return f"Freehand Cut - draw a closed loop around the model ({n} samples)"
+        strokes = len(self.breaks) + (1 if self.loop else 0)
+        return f"Freehand Cut - loop around the model ({len(self.loop)} samples, {strokes} strokes)"
 
+    # -- view helpers ---------------------------------------------------------
+    def eye_dir(self):
+        """Approximate view direction, cheap enough to call for every drawn point."""
+        return self.rv3d.view_rotation @ Vector((0.0, 0.0, -1.0))
+
+    def facing_camera(self, nor, tol=0.2):
+        """Front facing, with slack so a start point on the silhouette still counts."""
+        return nor.dot(self.eye_dir()) < tol
+
+    def start_visible(self, context):
+        """True when the loop start is really the surface under that screen position.
+
+        After orbiting to the far side the start point still projects somewhere over
+        the model, so a plain screen-distance test would snap the loop closed against
+        a point the user cannot even see.
+        """
+        loc, nor = self.loop[0]
+        p = self.to2d(loc)
+        if p is None or not self.facing_camera(nor):
+            return False
+        origin = view3d_utils.region_2d_to_origin_3d(self.region, self.rv3d, p)
+        depth = (loc - origin).length
+        hit, _loc, _n, dist = self.cast(context, p)
+        return (not hit) or dist >= depth - self.diag * 0.02
+
+    # -- input ----------------------------------------------------------------
     def on_press(self, context, c):
         self.drawing = True
+        self.stroke_start = len(self.loop)
+        if self.loop:
+            # the segment joining the previous stroke to this one bridges two views
+            self.breaks.add(self.stroke_start)
         return self.on_move(context, c)
 
     def on_move(self, context, c):
@@ -459,9 +570,9 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
             return None
         self.loop.append((loc, nor))
         self.loop2d.append(c)
-        if len(self.loop) > 8:
+        if len(self.loop) > 8 and len(self.loop) - self.stroke_start > self.MIN_STROKE:
             start2d = self.to2d(self.loop[0][0])
-            if start2d is not None and dist2d(c, start2d) <= self.CLOSE_PX:
+            if start2d is not None and dist2d(c, start2d) <= self.CLOSE_PX and self.start_visible(context):
                 self.drawing = False
                 return self.close_loop(context)
         return None
@@ -474,8 +585,30 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
     def on_confirm(self, context):
         if len(self.loop) >= 3:
             return self.close_loop(context)
+        self.report({'WARNING'}, "Draw at least a few points before closing the loop")
         return None
 
+    def on_key(self, context, event):
+        if event.type == 'C':
+            return self.on_confirm(context)
+        if event.type == 'BACK_SPACE' or (event.type == 'Z' and event.ctrl):
+            self.undo_stroke(context)
+        return None
+
+    def undo_stroke(self, context):
+        """Drop the last stroke - a stroke drawn from a bad angle is easy to redo."""
+        if not self.loop:
+            return
+        starts = [b for b in self.breaks if 0 < b < len(self.loop)]
+        cut = max(starts) if starts else 0
+        del self.loop[cut:]
+        del self.loop2d[cut:]
+        self.breaks = {b for b in self.breaks if b < cut}
+        self.drawing = False
+        self.stroke_start = len(self.loop)
+        self.update_status(context)
+
+    # -- result ---------------------------------------------------------------
     def close_loop(self, context):
         settings = context.scene.esp
         src = (
@@ -512,19 +645,47 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
         data.anchor = locs[0]
         return self.contact_done(context, data)
 
+    # -- overlay ---------------------------------------------------------------
     def draw(self, context):
-        pts2d = []
-        for loc, _n in self.loop:
-            p = self.to2d(loc)
-            if p is not None:
-                pts2d.append(p)
-        if len(pts2d) >= 2:
-            draw.lines_2d(pts2d, draw.RED, 2.5)
+        eye = self.eye_dir()
+        pts2d = [(self.to2d(loc), nor.dot(eye) > 0.0) for loc, nor in self.loop]
+        run = []
+        style = None
+        for i in range(1, len(pts2d)):
+            (a, a_back), (b, b_back) = pts2d[i - 1], pts2d[i]
+            if a is None or b is None:
+                if len(run) >= 2:
+                    draw.lines_2d(run, style[0], style[1])
+                run, style = [], None
+                continue
+            if i in self.breaks:
+                s = (draw.DIM, 1.0)  # bridge between two strokes / two viewpoints
+            elif a_back or b_back:
+                s = (draw.RED_BACK, 1.5)  # running behind the model
+            else:
+                s = (draw.RED, 2.5)
+            if s != style:
+                if len(run) >= 2:
+                    draw.lines_2d(run, style[0], style[1])
+                run, style = [a], s
+            run.append(b)
+        if len(run) >= 2:
+            draw.lines_2d(run, style[0], style[1])
+        if not self.loop:
+            return
+        last2d = pts2d[-1][0]
+        if last2d is not None:
             if self.drawing:
-                draw.lines_2d([pts2d[-1], self.mouse], draw.DIM, 1.0)
-        if pts2d:
-            draw.points_2d([pts2d[0]], draw.GREEN, 10.0)
-            draw.circle_2d(pts2d[0], self.CLOSE_PX, draw.GREEN)
+                draw.lines_2d([last2d, self.mouse], draw.DIM, 1.0)
+            else:
+                draw.points_2d([last2d], draw.WHITE, 7.0)  # where the next stroke picks up
+        start2d = pts2d[0][0]
+        if start2d is not None:
+            if len(pts2d) >= 3 and not self.drawing and last2d is not None:
+                draw.lines_2d([last2d, start2d], draw.DIM, 1.0)  # how the loop would close now
+            color = draw.GREEN if self.facing_camera(self.loop[0][1]) else draw.DIM
+            draw.points_2d([start2d], color, 10.0)
+            draw.circle_2d(start2d, self.CLOSE_PX, color)
 
 
 CLASSES = (ESP_OT_cut_straight, ESP_OT_cut_curved, ESP_OT_cut_freehand)

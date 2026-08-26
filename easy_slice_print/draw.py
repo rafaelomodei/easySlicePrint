@@ -9,6 +9,7 @@ GREEN = (0.35, 0.95, 0.45, 0.95)
 ORANGE = (1.0, 0.55, 0.15, 0.95)
 WHITE = (1.0, 1.0, 1.0, 0.9)
 RED = (1.0, 0.25, 0.2, 0.95)
+RED_BACK = (1.0, 0.45, 0.4, 0.4)  # loop running on the far side of the model
 DIM = (1.0, 1.0, 1.0, 0.35)
 
 

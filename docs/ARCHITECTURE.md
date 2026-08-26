@@ -23,11 +23,17 @@ easy_slice_print/
 ## The cut pipeline (`core/cutting.py`)
 
 1. **Patch** — every tool produces an open mesh in world space:
-   * plane: one big quad;
-   * curve: the stroke (resampled to *Control Points*) extruded along the view direction, extended
-     past the model on both ends (`surfaces.ribbon_patch`);
-   * freehand: the loop drawn on the surface, pushed a little outward along the surface normals,
-     smoothed, resampled, filled with triangles (`surfaces.loop_patch`).
+   * plane: one quad built around the drawn segment - as wide as the line, and only as deep as
+     the model reaches underneath it (rays marched through every crossing), plus *Surface
+     Margin* on each side (`surfaces.rect_patch`, `CutToolBase.model_span`);
+   * curve: the stroke (resampled to *Control Points*) extruded along the view direction, over the
+     depth the model occupies under the stroke and extended past its ends by *Surface Margin*
+     (`surfaces.ribbon_patch`);
+   * freehand: the loop drawn on the surface (over as many strokes and viewpoints as needed —
+     samples are stored in world space, so orbiting between strokes keeps the loop), pushed a
+     little outward along the surface normals, smoothed, resampled, filled with triangles
+     (`surfaces.loop_patch`: an n-gon while the loop stays near a plane, a centroid fan once it
+     wraps around the model, where the n-gon fill would degenerate into slivers).
 2. **Kerf slab** — the patch is thickened by *Cut Gap* along its vertex normals into a closed
    solid (`surfaces.slab_from_patch`).
 3. **Split** — `model − slab` (Boolean modifier, *Manifold* solver when available, *Exact*
@@ -51,6 +57,13 @@ names of the preview objects (`ESP_Surface_*`, `ESP_Pin_*` in `_ESP_Plan`), the 
 matrix, estimated centre/normal/inscribed diameter per contact, an anchor point, and its own
 connector settings. Curve/freehand control points live on the surface object as custom properties
 (local space) and the mesh is rebuilt from them when edited.
+
+A generated cut surface carries its own origin: the patch is produced in world space, then stored
+local to `plan.surface_origin_point` (the patch's median point by default, the target object's
+origin when *Surface Origin* says so) with the offset as the object's `matrix_world`. That is what
+makes `R` / `S` on a cut surface pivot on the surface itself. Everything downstream reads it back
+through `plan.surface_world_patch` (`matrix_basis @ v.co`), so moved, rotated and scaled surfaces
+build exactly as previewed.
 
 User edits of the pin are kept as a *delta* in the pin's unscaled local frame
 (`plan.user_delta`), so changing the size preset, the shape or the pin side keeps the offset.

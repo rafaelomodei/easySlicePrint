@@ -73,7 +73,12 @@ class ESP_PT_tools(ESPPanel, bpy.types.Panel):
         row.operator("esp.cut_straight", text="Plane", icon='MESH_PLANE', depress=s.tool == 'STRAIGHT')
         row.operator("esp.cut_curved", text="Curve", icon='CURVE_BEZCURVE', depress=s.tool == 'CURVED')
         row.operator("esp.cut_freehand", text="Freehand", icon='GREASEPENCIL', depress=s.tool == 'FREEHAND')
+        if s.tool == 'FREEHAND':
+            layout.label(text="Orbit (MMB) between strokes to reach the far side", icon='INFO')
         col = layout.column(align=True)
+        col.prop(s, "surface_margin", slider=True)
+        if s.mode == 'PLAN':
+            col.prop(s, "surface_origin", text="Origin")
         col.prop(s, "freehand_smoothing", slider=True)
         col.prop(s, "control_points")
         layout.prop(s, "two_contact", toggle=True, icon='MOD_MIRROR')

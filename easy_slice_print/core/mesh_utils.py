@@ -323,6 +323,28 @@ def object_ray_cast(obj, origin_w, direction_w, depsgraph=None, max_dist=1e30):
     return True, loc_w, nor_w, (loc_w - origin_w).length
 
 
+def object_ray_hits(obj, origin_w, direction_w, eps, depsgraph=None, max_dist=1e30, limit=64):
+    """Distance of EVERY surface crossing along a ray, in world space.
+
+    `object_ray_cast` stops at the first hit; this marches `eps` past each hit to
+    collect the whole set, which is what "how deep does the model go here" needs.
+    """
+    o = Vector(origin_w)
+    d = Vector(direction_w).normalized()
+    out = []
+    start = o
+    for _ in range(limit):
+        travelled = (start - o).length
+        if travelled >= max_dist:
+            break
+        hit, loc, _n, _dist = object_ray_cast(obj, start, d, depsgraph, max_dist=max_dist - travelled)
+        if not hit:
+            break
+        out.append((loc - o).length)
+        start = loc + d * eps
+    return out
+
+
 def object_closest_point(obj, point_w, depsgraph=None):
     inv = obj.matrix_world.inverted_safe()
     p = inv @ point_w

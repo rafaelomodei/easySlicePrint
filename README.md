@@ -47,8 +47,8 @@
 
 | | |
 |---|---|
-| **Plane Cut** | drag a line in the viewport → flat cut through the model |
-| **Curve Cut** | draw a curved line over the model → the cut follows the line through the model |
+| **Plane Cut** | drag a line in the viewport → flat cut sized to the line you drew, not to the whole model |
+| **Curve Cut** | draw a curved line over the model → the cut follows the line through the model, reaching just past the stroke |
 | **Freehand Cut** | draw a closed loop *around* the model surface (orbit while drawing) → the loop is filled and used as the cut surface (necks, wrists, anything a plane can't reach) |
 | **Two Contacts / Base Split** | two contacts cut as one operation (e.g. both feet on a base), each with its own connector |
 | **Quick Cut mode** | immediate final parts, no history |
@@ -76,11 +76,21 @@ Tested headless on Blender 4.2.23 LTS and 5.2.1 LTS (CI runs both). Works on Win
 4. Click **Plane**, **Curve** or **Freehand** and draw in the viewport:
    * Plane: drag a line across the model (or click, click). `Esc` cancels.
    * Curve: draw a line over the model that crosses the whole silhouette.
-   * Freehand: draw on the surface around the model; orbit with `MMB` between strokes;
-     return to the green start point (or press `Enter`) to close the loop.
+
+   The cut surface is built to the size of what you drew — the length of the stroke, and only
+   the depth the model actually occupies underneath it — so a cut touches just the region you
+   marked instead of everything lying in the same plane. *Surface Margin* sets how far past your
+   stroke it reaches; raise it if a cut reports that it did not split the part.
+   * Freehand: draw on the surface around the model. Release the button, orbit with `MMB`
+     to bring the far side into view, then draw again — the loop keeps going across views.
+     The part of the loop hidden behind the model is drawn faded; the jump between two
+     strokes is drawn dim. `Ctrl+Z` (or `Backspace`) undoes the last stroke. Close the loop
+     on the green start point — it only snaps when that point is actually visible — or with
+     `Enter` / `C` from any angle.
 5. Connector panel: shape, size, pin side, cut gap, clearance.
 6. **Plan mode**: select a cut in the list to edit it — *Edit Cut Surface* (G/R/S for planes, drag
-   points for curves), *Select Connector* then G/R/S, *Reset*, *Swap* the pin side. Untick **Ready** to
+   points for curves; each cut surface has its own origin at its centre, so `R` and `S` pivot on the
+   surface — set *Surface Origin* to *Target Object* if you would rather they share the model's pivot), *Select Connector* then G/R/S, *Reset*, *Swap* the pin side. Untick **Ready** to
    leave a cut out of the build, the eye hides its preview, ✕ deletes it.
 7. **Build** → parts appear in `ESP_Built_<name>`. **Back to Plan** to change anything, **Approve** to finish.
 8. **Exploded View** to check the fit, **Export** to write the files.

@@ -47,8 +47,8 @@
 
 | | |
 |---|---|
-| **Plane Cut** (corte reto) | arraste uma linha no viewport → corte plano atravessando o modelo |
-| **Curve Cut** (corte curvo) | desenhe uma linha curva sobre o modelo → o corte segue a linha atravessando o modelo |
+| **Plane Cut** (corte reto) | arraste uma linha no viewport → corte plano do tamanho da linha desenhada, não do modelo inteiro |
+| **Curve Cut** (corte curvo) | desenhe uma linha curva sobre o modelo → o corte segue a linha atravessando o modelo, indo só um pouco além do traço |
 | **Freehand Cut** (corte livre) | desenhe um laço fechado *em volta* da superfície (orbite enquanto desenha) → o laço é preenchido e vira a superfície de corte (pescoços, pulsos, qualquer lugar que um plano não alcança) |
 | **Two Contacts / Base Split** | dois contatos cortados numa só operação (ex.: os dois pés numa base), cada um com o seu conector |
 | **Quick Cut** | corte final imediato, sem histórico |
@@ -76,11 +76,21 @@ Testado headless no Blender 4.2.23 LTS e 5.2.1 LTS (o CI roda os dois). Funciona
 4. Clique em **Plane**, **Curve** ou **Freehand** e desenhe no viewport:
    * Plane: arraste uma linha atravessando o modelo (ou clique, clique). `Esc` cancela.
    * Curve: desenhe uma linha sobre o modelo cruzando toda a silhueta.
-   * Freehand: desenhe na superfície em volta do modelo; orbite com o `botão do meio` entre traços;
-     volte ao ponto verde inicial (ou `Enter`) para fechar o laço.
+
+   A superfície de corte é criada do tamanho do que você desenhou — o comprimento do traço e
+   apenas a profundidade que o modelo ocupa embaixo dele — então o corte atinge só a região que
+   você marcou, e não tudo o que estiver no mesmo plano. *Surface Margin* define o quanto ela
+   avança além do traço; aumente se um corte avisar que não separou a peça.
+   * Freehand: desenhe na superfície em volta do modelo. Solte o botão, orbite com o `botão do meio`
+     para trazer o outro lado à vista e desenhe de novo — o laço continua entre as visões.
+     O trecho do laço escondido atrás do modelo aparece esmaecido; o salto entre dois traços
+     aparece pontilhado. `Ctrl+Z` (ou `Backspace`) desfaz o último traço. Feche o laço no ponto
+     verde inicial — ele só fecha sozinho quando esse ponto está realmente visível — ou com
+     `Enter` / `C` de qualquer ângulo.
 5. Painel Connector: forma, tamanho, lado do pino, cut gap, folga.
 6. **Plan mode**: selecione um corte na lista para editar — *Edit Cut Surface* (G/R/S nos planos, arraste
-   pontos nas curvas), *Select Connector* e G/R/S, *Reset*, *Swap* do lado do pino. Desmarque **Ready** para
+   pontos nas curvas; cada superfície de corte tem origem própria no seu centro, então `R` e `S` giram e
+   escalam em torno dela — mude *Surface Origin* para *Target Object* se preferir o pivô do modelo), *Select Connector* e G/R/S, *Reset*, *Swap* do lado do pino. Desmarque **Ready** para
    deixar um corte fora do build, o olho esconde o preview, ✕ apaga.
 7. **Build** → as peças aparecem em `ESP_Built_<nome>`. **Back to Plan** para mudar algo, **Approve** para finalizar.
 8. **Exploded View** para conferir o encaixe, **Export** para gravar os arquivos.

@@ -168,11 +168,30 @@ def _preview_object(scene, name, mesh, kind, color, mat_name):
     return obj
 
 
-def create_surface_object(context, name, data):
-    me = mesh_utils.mesh_from_pydata(name, data.verts, data.faces)
+def surface_origin_point(context, data, target):
+    """Where the origin of a generated cut surface goes.
+
+    By default the surface's own median point, so R / S on it pivot on the surface
+    instead of on some point out in the scene. 'OBJECT' puts it on the origin of the
+    model being cut, which is what you want when several cut surfaces should share
+    one pivot.
+    """
+    if context.scene.esp.surface_origin == 'OBJECT' and target is not None:
+        return target.matrix_world.translation.copy()
+    if data.verts:
+        return surfaces.patch_center(data.verts)
+    return Vector((0.0, 0.0, 0.0))
+
+
+def create_surface_object(context, name, data, target=None):
+    """The patch arrives in world space; it is stored local to `origin` so the preview
+    object carries a real origin of its own (mesh AND the editable control points)."""
+    origin = surface_origin_point(context, data, target)
+    me = mesh_utils.mesh_from_pydata(name, [Vector(v) - origin for v in data.verts], data.faces)
     obj = _preview_object(context.scene, name, me, 'surface', GREEN, "ESP_Preview_Surface")
+    obj.matrix_world = Matrix.Translation(origin)
     obj["esp_kind"] = data.kind
-    flat_pts = [c for p in data.points for c in p]
+    flat_pts = [c for p in data.points for c in (Vector(p) - origin)]
     obj["esp_points"] = flat_pts
     obj["esp_points_orig"] = list(flat_pts)
     obj["esp_view"] = list(data.view_dir)
@@ -201,9 +220,9 @@ def rebuild_surface(obj):
     kind = obj.get("esp_kind", 'STRAIGHT')
     pts = surface_points(obj)
     if kind == 'CURVED' and len(pts) >= 2:
-        verts, faces = surfaces.ribbon_patch(
-            pts, Vector(obj["esp_view"]), 0.0, obj["esp_extend"], depth_range=tuple(obj["esp_depth"])
-        )
+        # the control points are local to the object; the stored view direction is world
+        view = (obj.matrix_basis.to_3x3().inverted_safe() @ Vector(obj["esp_view"])).normalized()
+        verts, faces = surfaces.ribbon_patch(pts, view, 0.0, obj["esp_extend"], depth_range=tuple(obj["esp_depth"]))
     elif kind == 'FREEHAND' and len(pts) >= 3:
         verts, faces = surfaces.loop_patch(pts)
     else:
@@ -355,7 +374,7 @@ def add_record(context, target, cut_type, contacts):
         active = settings.cuts[settings.active_cut] if 0 <= settings.active_cut < len(settings.cuts) - 1 else None
         copy_connector_props(active if active is not None else settings, rec)
         for i, data in enumerate(contacts):
-            sobj = create_surface_object(context, f"ESP_Surface_{rec.name}_{'AB'[i]}", data)
+            sobj = create_surface_object(context, f"ESP_Surface_{rec.name}_{'AB'[i]}", data, target)
             _set_contact_attr(rec, "surface", i, sobj.name)
             center, normal, inscribed = contact_frame(
                 context, target, data.verts, data.faces, data.hit, data.through, data.center_hint

@@ -8,14 +8,18 @@ below is an original implementation; nothing was copied.
 |---|---|---|
 | Two ways of working: immediate vs. planned | **Quick Cut** / **Plan Mode** toggle | `ESP_PT_main` |
 | Straight cut drawn in the viewport | **Plane Cut** (drag a line; plane contains the view direction) | `ops_tools.ESP_OT_cut_straight` |
+| Cut only the region that was marked | every patch is sized to the stroke: as wide/long as it was drawn, only as deep as the model reaches underneath (ray marched), plus a *Surface Margin* | `CutToolBase.model_span`, `surfaces.rect_patch` |
 | Curved cut following a drawn line | **Curve Cut** (stroke → ribbon extruded along the view) | `ESP_OT_cut_curved` |
-| Cut that wraps around a limb / neck | **Freehand Cut** (closed loop on the surface, orbit while drawing, loop filled) | `ESP_OT_cut_freehand` |
+| Cut that wraps around a limb / neck | **Freehand Cut** (closed loop on the surface, loop filled) | `ESP_OT_cut_freehand` |
+| Reach the far side of the model while marking | orbit between strokes; the loop is kept in world space, hidden parts drawn faded, auto-close only on a visible start point, `Ctrl+Z` undoes a stroke, `Enter`/`C` close from any angle | `ESP_OT_cut_freehand` |
+| Fill a loop drawn across several viewpoints | non-planar loops filled with a centroid fan instead of an n-gon | `surfaces.loop_patch` |
 | Control the freehand smoothing / editable point count | *Smoothing* and *Control Points* | `ESP_PT_tools` |
 | Separate a figure from its base (two contacts at once) | **Two Contacts / Base Split** toggle; both contacts drawn in one go, one record `Base Split NNN` | `settings.two_contact` |
 | Automatically start the next cut | **Chain Cuts** | `settings.chain_cuts` |
 | Editable list of planned cuts: enable, hide, delete, rename | **Planned Cuts** UIList (Ready ☑, eye, ✕, name) | `ESP_UL_cuts` |
 | Draft is cheap, geometry deferred to build | records store only the cut surface + pin transform; booleans run on **Build** | `plan.py`, `ESP_OT_build` |
 | Move / rotate / scale a straight cut | **Edit Cut Surface** selects the plane; G/R/S; pin follows (depsgraph handler) | `ESP_OT_edit_surface`, `plan.depsgraph_handler` |
+| Cut surface with a usable pivot | generated surfaces get their own origin at the patch centre (*Surface Origin*: Cut Surface / Target Object) | `plan.surface_origin_point` |
 | Edit curve/freehand points | point editor modal: drag, Ctrl+LMB add, X delete, G slide whole cut, R reset, Ctrl+Z undo | `ESP_OT_edit_surface` |
 | Connector on/off, shape, size, width/height | Connector panel (per next cut or per selected cut; new cuts copy the selected cut's settings) | `ESP_PT_connector` |
 | Built-in + custom connector shapes | Cylinder, Tapered, Hexagon, Box + `ESP_Connectors` library (unit-box convention) | `core/connectors.py` |

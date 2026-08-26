@@ -45,6 +45,23 @@ TOOL_ITEMS = [
     ),
 ]
 
+SURFACE_ORIGIN_ITEMS = [
+    (
+        'SURFACE',
+        "Cut Surface",
+        "Origin at the centre of the cut surface itself, so R / S pivot on the surface",
+        'PIVOT_MEDIAN_POINT',
+        0,
+    ),
+    (
+        'OBJECT',
+        "Target Object",
+        "Origin at the origin of the object being cut, so every cut surface shares one pivot",
+        'OBJECT_ORIGIN',
+        1,
+    ),
+]
+
 SIDE_ITEMS = [
     ('A', "Side A", "The part on the + side of the cut surface carries the pin"),
     ('B', "Side B", "The part on the - side of the cut surface carries the pin"),
@@ -188,6 +205,24 @@ class ESP_Settings(bpy.types.PropertyGroup):
         name="Smoothing",
         description="Smooth the freehand loop before filling it",
         default=0.35,
+        min=0.0,
+        max=1.0,
+        subtype='FACTOR',
+    )
+    surface_origin: EnumProperty(
+        name="Surface Origin",
+        description="Where the origin of a generated cut surface is placed",
+        items=SURFACE_ORIGIN_ITEMS,
+        default='SURFACE',
+    )
+    surface_margin: FloatProperty(
+        name="Surface Margin",
+        description=(
+            "How far the cut surface reaches past the region you drew, as a fraction of the "
+            "stroke. The surface is sized to the stroke, not to the whole model, so a cut only "
+            "touches what you marked - raise this if a cut fails to separate the part"
+        ),
+        default=0.06,
         min=0.0,
         max=1.0,
         subtype='FACTOR',

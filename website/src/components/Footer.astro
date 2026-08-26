@@ -1,0 +1,102 @@
+---
+import { site } from "../data/site";
+const year = new Date().getFullYear();
+---
+
+<footer class="footer">
+  <div class="container">
+    <div class="cols">
+      <div>
+        <strong>{site.name}</strong>
+        <p class="muted">{site.description}</p>
+        <p class="faint small">
+          Free software under the GNU GPL v3.0 or later. {site.name} is an independent project: it is not
+          affiliated with, endorsed by or derived from any commercial add-on, and no third-party code or
+          assets are included.
+        </p>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href={site.repoUrl}>Source code</a></li>
+          <li><a href={site.links.releases}>Releases</a></li>
+          <li><a href={site.links.changelog}>Changelog</a></li>
+          <li><a href={site.links.license}>License</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Docs</h4>
+        <ul>
+          <li><a href={site.links.architecture}>Architecture</a></li>
+          <li><a href={site.links.features}>Feature map</a></li>
+          <li><a href={site.links.contributing}>Contributing</a></li>
+          <li><a href={site.links.readmePtBr}>README em português</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Help</h4>
+        <ul>
+          <li><a href={site.links.newIssue}>Report a bug</a></li>
+          <li><a href={site.links.newIssue}>Request a feature</a></li>
+          <li><a href={site.links.discussions}>Discussions</a></li>
+          <li><a href={site.links.security}>Security policy</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="faint small copy">
+      © {year} {site.author} and {site.name} contributors · Blender is a trademark of the Blender Foundation.
+    </p>
+  </div>
+</footer>
+
+<style>
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 3.5rem 0 2rem;
+    background: var(--bg-elev);
+  }
+  .cols {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 2rem;
+  }
+  h4 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-faint);
+    margin-bottom: 0.8rem;
+  }
+  ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  li {
+    margin-bottom: 0.45rem;
+  }
+  li a {
+    color: var(--text-muted);
+  }
+  li a:hover {
+    color: var(--text);
+  }
+  .small {
+    font-size: 0.85rem;
+  }
+  .copy {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+  @media (max-width: 860px) {
+    .cols {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 520px) {
+    .cols {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -14,6 +14,8 @@
 </p>
 
 <p align="center">
+  <a href="https://rafaelomodei.github.io/easySlicePrint/"><strong>Website</strong></a> ·
+  <a href="https://github.com/rafaelomodei/easySlicePrint/releases/latest"><strong>Download</strong></a> ·
   <em>Português: veja <a href="README.pt-BR.md">README.pt-BR.md</a></em>
 </p>
 
@@ -112,7 +114,8 @@ BLENDER=/path/to/blender scripts/build.sh
 Code layout: `easy_slice_print/core/` is pure geometry (patches → kerf slab → booleans → connectors),
 `plan.py` holds the non-destructive records and previews, `ops_tools.py` the modal drawing tools,
 `ops_plan.py` build/approve, `ui.py` the panels. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-and [docs/FEATURES.md](docs/FEATURES.md).
+and [docs/FEATURES.md](docs/FEATURES.md). The public website lives in [`website/`](website/) (Astro,
+deployed to GitHub Pages by `.github/workflows/pages.yml`).
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
 Security issues: see [SECURITY.md](SECURITY.md).

@@ -19,3 +19,6 @@ Tips:
   plus the EasySlice panel.
 * Keep the total of this folder small — these files ship in the git history, not
   in the extension zip (`scripts/build.sh` only packs `easy_slice_print/`).
+
+The website (`website/src/data/media.ts`) uses the same shots plus short clips of each cut type —
+see `website/README.md` for how to plug them in.

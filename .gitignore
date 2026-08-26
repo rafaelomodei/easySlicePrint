@@ -14,3 +14,7 @@ tests/_out/
 CLAUDE.md
 .mcp.json
 easy_slice_print/LICENSE
+
+# website (Astro)
+website/node_modules/
+website/.astro/

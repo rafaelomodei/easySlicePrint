@@ -2,7 +2,7 @@
 [tool.ruff]
 line-length = 120
 target-version = "py311"  # Blender 4.2 ships Python 3.11
-extend-exclude = ["dist", "build"]
+extend-exclude = ["dist", "build", "website"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]

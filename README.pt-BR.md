@@ -14,6 +14,8 @@
 </p>
 
 <p align="center">
+  <a href="https://rafaelomodei.github.io/easySlicePrint/"><strong>Site</strong></a> ·
+  <a href="https://github.com/rafaelomodei/easySlicePrint/releases/latest"><strong>Download</strong></a> ·
   <em>English: see <a href="README.md">README.md</a></em>
 </p>
 
@@ -106,7 +108,8 @@ BLENDER=/caminho/para/blender scripts/run_tests.sh   # testes headless
 BLENDER=/caminho/para/blender scripts/build.sh       # gera o zip em dist/
 ```
 
-Veja [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) e [docs/FEATURES.md](docs/FEATURES.md).
+Veja [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) e [docs/FEATURES.md](docs/FEATURES.md). O site público fica em
+[`website/`](website/) (Astro, publicado no GitHub Pages por `.github/workflows/pages.yml`).
 Contribuições são bem-vindas — leia [CONTRIBUTING.md](CONTRIBUTING.md) e o [Código de Conduta](CODE_OF_CONDUCT.md).
 
 ## Licença

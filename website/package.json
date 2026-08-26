@@ -1,0 +1,16 @@
+{
+  "name": "easyslice-print-website",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Public website for EasySlice Print, a free Blender add-on for splitting models and adding connectors for 3D printing.",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "astro": "^7.2.7"
+  }
+}

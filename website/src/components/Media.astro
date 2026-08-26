@@ -1,0 +1,144 @@
+---
+/**
+ * Renders one entry of `src/data/media.ts`: an image, a self-hosted video, a
+ * YouTube embed, or — while `placeholder` is set — the placeholder illustration
+ * with a "coming soon" overlay and the shot description.
+ */
+import type { MediaSlot } from "../data/media";
+
+interface Props {
+  slot: MediaSlot;
+  class?: string;
+  /** Larger overlay for the hero. */
+  large?: boolean;
+}
+
+const { slot, class: className = "", large = false } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const resolve = (p: string) => (/^https?:\/\//.test(p) ? p : `${base}/${p.replace(/^\//, "")}`);
+const aspect = slot.aspect ?? "16 / 9";
+const isVideoPlaceholder = slot.placeholder && slot.kind !== "image";
+---
+
+<figure class:list={["media", className, { placeholder: slot.placeholder, large }]} style={`aspect-ratio:${aspect}`}>
+  {
+    slot.placeholder ? (
+      <>
+        <img src={resolve(slot.src)} alt={slot.alt} loading="lazy" decoding="async" />
+        <div class="overlay" aria-hidden="true">
+          {isVideoPlaceholder && (
+            <span class="play">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </span>
+          )}
+          <span class="badge">{isVideoPlaceholder ? "Demo video coming soon" : "Screenshot coming soon"}</span>
+          {slot.expects && <span class="expects">{slot.expects}</span>}
+        </div>
+      </>
+    ) : slot.kind === "youtube" ? (
+      <iframe
+        src={`https://www.youtube-nocookie.com/embed/${slot.src}?rel=0`}
+        title={slot.alt}
+        loading="lazy"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen
+      />
+    ) : slot.kind === "video" ? (
+      <video
+        src={resolve(slot.src)}
+        poster={slot.poster ? resolve(slot.poster) : undefined}
+        controls
+        muted
+        loop
+        playsinline
+        preload="metadata"
+        aria-label={slot.alt}
+      />
+    ) : (
+      <img src={resolve(slot.src)} alt={slot.alt} loading="lazy" decoding="async" />
+    )
+  }
+  {slot.caption && <figcaption>{slot.caption}</figcaption>}
+</figure>
+
+<style>
+  .media {
+    position: relative;
+    margin: 0;
+    width: 100%;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+  }
+  .media > img,
+  .media > video,
+  .media > iframe {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border: 0;
+  }
+  figcaption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0.5rem 0.9rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: linear-gradient(transparent, rgba(13, 15, 20, 0.85));
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 1rem;
+    text-align: center;
+    background: rgba(13, 15, 20, 0.35);
+  }
+  .play {
+    width: 64px;
+    height: 64px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(255, 138, 61, 0.9);
+    color: #17110b;
+    box-shadow: 0 10px 30px rgba(255, 122, 40, 0.4);
+  }
+  .large .play {
+    width: 84px;
+    height: 84px;
+  }
+  .badge {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(13, 15, 20, 0.85);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  .expects {
+    max-width: 34ch;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    background: rgba(13, 15, 20, 0.7);
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+  }
+  .large .expects {
+    font-size: 0.85rem;
+    max-width: 48ch;
+  }
+</style>

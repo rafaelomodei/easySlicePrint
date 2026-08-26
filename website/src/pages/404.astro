@@ -1,0 +1,32 @@
+---
+import Base from "../layouts/Base.astro";
+import { site } from "../data/site";
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+---
+
+<Base title={`Page not found — ${site.name}`}>
+  <section class="section">
+    <div class="container nf">
+      <span class="code">404</span>
+      <h1>That page got cut off.</h1>
+      <p class="muted">Nothing here — but the connectors still fit.</p>
+      <a class="btn btn-primary" href={`${base}/`}>Back to the start</a>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .nf {
+    text-align: center;
+    padding-block: 4rem;
+  }
+  .code {
+    font-family: var(--mono);
+    color: var(--accent);
+    font-size: 1.2rem;
+    letter-spacing: 0.2em;
+  }
+  h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+  }
+</style>

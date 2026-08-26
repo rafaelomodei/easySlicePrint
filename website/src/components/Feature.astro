@@ -1,0 +1,33 @@
+---
+interface Props {
+  icon: string;
+  title: string;
+}
+const { icon, title } = Astro.props;
+---
+
+<div class="card feature">
+  <span class="icon" aria-hidden="true">{icon}</span>
+  <h3>{title}</h3>
+  <p class="muted"><slot /></p>
+</div>
+
+<style>
+  .feature {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .feature h3 {
+    font-size: 1.05rem;
+    margin: 0.25rem 0 0.15rem;
+  }
+  .feature p {
+    margin: 0;
+    font-size: 0.95rem;
+  }
+  .icon {
+    font-size: 1.5rem;
+    line-height: 1;
+  }
+</style>

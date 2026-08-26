@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 473" role="img" aria-label="Demo video — coming soon (placeholder)">
+  <defs>
+    <pattern id="g" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" fill="none" stroke="#1d2230" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="840" height="473" fill="#0f1218"/>
+  <rect width="840" height="473" fill="url(#g)"/>
+  <rect x="16" y="16" width="150" height="26" rx="6" fill="#191d26"/>
+  <text x="28" y="34" font-family="ui-monospace,monospace" font-size="12" fill="#6b7489">EasySlice ▸ N-panel</text>
+  <rect x="700" y="16" width="124" height="440" rx="8" fill="#141821" stroke="#2a3040"/>
+  <g font-family="ui-monospace,monospace" font-size="11" fill="#6b7489">
+    <text x="712" y="40">Plan Mode</text><text x="712" y="64">Plane</text><text x="712" y="84">Curve</text><text x="712" y="104">Freehand</text>
+    <text x="712" y="140">Connector</text><text x="712" y="160">Cylinder</text><text x="712" y="180">Ø 6 mm</text>
+    <text x="712" y="216">Cut gap 0.2</text><text x="712" y="236">Clear. 0.2</text>
+    <rect x="710" y="400" width="104" height="26" rx="6" fill="#ff8a3d"/><text x="741" y="418" fill="#17110b" font-weight="700">Build</text>
+  </g>
+  
+  <g transform="translate(0,-30)"><path d="M330 130 h180 v90 h-180z" fill="#2a3040" stroke="#3a4256"/><rect x="408" y="220" width="24" height="40" rx="4" fill="#ff8a3d"/></g><g transform="translate(0,30)"><path d="M330 250 h180 v90 h-180z" fill="#2a3040" stroke="#3a4256"/></g><path d="M300 240 h240" stroke="#ff8a3d" stroke-width="2" stroke-dasharray="8 6"/><circle cx="420" cy="240" r="34" fill="none" stroke="#e8ebf2" stroke-opacity=".6" stroke-width="2"/><path d="M412 226 l22 14 l-22 14z" fill="#e8ebf2"/>
+  <text x="420" y="425" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-size="18" font-weight="700" fill="#e8ebf2">Demo video — coming soon</text>
+  <text x="420" y="448" text-anchor="middle" font-family="ui-monospace,monospace" font-size="12" fill="#6b7489">replace with media/demo.mp4</text>
+</svg>

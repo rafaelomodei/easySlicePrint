@@ -1,0 +1,432 @@
+---
+/**
+ * The landing page, rendered once per language.
+ *
+ *   /      → en (default locale, no prefix)
+ *   /pt/   → Português
+ *   /es/   → Español
+ *
+ * All copy lives in `src/i18n/{en,pt,es}.ts`.
+ */
+import Base from "../layouts/Base.astro";
+import Media from "../components/Media.astro";
+import Section from "../components/Section.astro";
+import Feature from "../components/Feature.astro";
+import Faq from "../components/Faq.astro";
+import { site } from "../data/site";
+import { defaultLang, languages, localizedMedia, useTranslations, type Lang } from "../i18n";
+
+export function getStaticPaths() {
+  return languages.map((lang) => ({
+    params: { lang: lang === defaultLang ? undefined : lang },
+    props: { lang },
+  }));
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const m = localizedMedia(t);
+
+/** Icons are language-independent; the titles/bodies come from `t.features.items`. */
+const featureIcons: Record<keyof typeof t.features.items, string> = {
+  plane: "\u{1F4D0}",
+  curve: "\u3030\uFE0F",
+  freehand: "\u{1F504}",
+  baseSplit: "\u{1F9B6}",
+  quickCut: "\u26A1",
+  planMode: "\u{1F5C2}\uFE0F",
+  connectors: "\u{1F529}",
+  kerf: "\u{1F4CF}",
+  remesh: "\u{1F9CA}",
+  exploded: "\u{1F4A5}",
+  export: "\u{1F4E6}",
+  checkMesh: "\u2705",
+};
+const features = Object.entries(t.features.items) as [keyof typeof featureIcons, { title: string; body: string }][];
+---
+
+<Base lang={lang} autoDetect={lang === defaultLang}>
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-grid">
+        <div class="hero-copy">
+          <div class="pills">
+            <span class="pill teal" set:html={t.hero.pillFree} />
+            <span class="pill">{t.hero.pillBlender}</span>
+            <span class="pill">{t.hero.pillPlatforms}</span>
+          </div>
+          <h1>{t.hero.titleLead} <span class="grad">{t.hero.titleAccent}</span></h1>
+          <p class="lead">{t.hero.lead}</p>
+          <div class="cta">
+            <a class="btn btn-primary" href="#download">
+              {t.hero.download} <small>{t.hero.free}</small>
+            </a>
+            <a class="btn btn-ghost" href={site.repoUrl} target="_blank" rel="noopener">{t.hero.github}</a>
+          </div>
+          <p class="faint fine">{t.hero.fine}</p>
+        </div>
+        <div class="hero-media">
+          <Media slot={m.hero} lang={lang} large />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ WORKFLOW ============ -->
+  <Section id="workflow" eyebrow={t.workflow.eyebrow} title={t.workflow.title} intro={t.workflow.intro}>
+    <div class="grid grid-3 steps-grid">
+      <div class="step">
+        <Media slot={m.stepCut} lang={lang} />
+        <h3><span class="num">1</span> {t.workflow.steps.cut.title}</h3>
+        <p class="muted">{t.workflow.steps.cut.body}</p>
+      </div>
+      <div class="step">
+        <Media slot={m.stepConnectors} lang={lang} />
+        <h3><span class="num">2</span> {t.workflow.steps.connectors.title}</h3>
+        <p class="muted">{t.workflow.steps.connectors.body}</p>
+      </div>
+      <div class="step">
+        <Media slot={m.stepExport} lang={lang} />
+        <h3><span class="num">3</span> {t.workflow.steps.export.title}</h3>
+        <p class="muted">{t.workflow.steps.export.body}</p>
+      </div>
+    </div>
+  </Section>
+
+  <!-- ============ PLAN MODE ============ -->
+  <Section id="plan-mode" eyebrow={t.planMode.eyebrow} title={t.planMode.title} intro={t.planMode.intro}>
+    <div class="stack">
+      <div class="split">
+        <div>
+          <h3>{t.planMode.plane.title}</h3>
+          <p class="muted" set:html={t.planMode.plane.body} />
+          <ul class="checks">
+            {t.planMode.plane.checks.map((item) => <li set:html={item} />)}
+          </ul>
+        </div>
+        <Media slot={m.planeCut} lang={lang} />
+      </div>
+
+      <div class="split reverse">
+        <div>
+          <h3>{t.planMode.curve.title}</h3>
+          <p class="muted" set:html={t.planMode.curve.body} />
+          <ul class="checks">
+            {t.planMode.curve.checks.map((item) => <li set:html={item} />)}
+          </ul>
+        </div>
+        <Media slot={m.curveCut} lang={lang} />
+      </div>
+
+      <div class="split">
+        <div>
+          <h3>{t.planMode.freehand.title}</h3>
+          <p class="muted" set:html={t.planMode.freehand.body} />
+          <ul class="checks">
+            {t.planMode.freehand.checks.map((item) => <li set:html={item} />)}
+          </ul>
+        </div>
+        <Media slot={m.freehandCut} lang={lang} />
+      </div>
+
+      <div class="split reverse">
+        <div>
+          <h3>{t.planMode.build.title}</h3>
+          <p class="muted" set:html={t.planMode.build.body} />
+          <ul class="checks">
+            {t.planMode.build.checks.map((item) => <li set:html={item} />)}
+          </ul>
+        </div>
+        <Media slot={m.buildExport} lang={lang} />
+      </div>
+    </div>
+  </Section>
+
+  <!-- ============ QUICK CUT ============ -->
+  <Section id="quick-cut" eyebrow={t.quickCut.eyebrow} title={t.quickCut.title} intro={t.quickCut.intro}>
+    <div class="split">
+      <Media slot={m.quickCut} lang={lang} />
+      <div>
+        <ul class="checks">
+          {t.quickCut.checks.map((item) => <li set:html={item} />)}
+        </ul>
+      </div>
+    </div>
+  </Section>
+
+  <!-- ============ CONNECTORS ============ -->
+  <Section id="connectors" eyebrow={t.connectors.eyebrow} title={t.connectors.title} intro={t.connectors.intro}>
+    <div class="split">
+      <div>
+        <div class="shapes">
+          {t.connectors.shapes.map((shape) => <span class="pill accent">{shape}</span>)}
+          <span class="pill">{t.connectors.shapesCustom}</span>
+        </div>
+        <ul class="checks">
+          {t.connectors.checks.map((item) => <li set:html={item} />)}
+        </ul>
+      </div>
+      <Media slot={m.connectors} lang={lang} />
+    </div>
+  </Section>
+
+  <!-- ============ FEATURES ============ -->
+  <Section id="features" eyebrow={t.features.eyebrow} title={t.features.title}>
+    <div class="grid grid-3">
+      {features.map(([key, item]) => <Feature icon={featureIcons[key]} title={item.title}>{item.body}</Feature>)}
+    </div>
+  </Section>
+
+  <!-- ============ WHO ============ -->
+  <Section id="who" eyebrow={t.who.eyebrow} title={t.who.title}>
+    <div class="grid grid-3">
+      {
+        Object.values(t.who.cards).map((card) => (
+          <div class="card">
+            <h3 set:html={card.title} />
+            <p class="muted">{card.body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </Section>
+
+  <!-- ============ COMPAT ============ -->
+  <Section id="compat" eyebrow={t.compat.eyebrow} title={t.compat.title}>
+    <div class="grid grid-2">
+      <div class="card">
+        <h3>{t.compat.compatibility.title}</h3>
+        <ul class="checks">
+          {t.compat.compatibility.checks.map((item) => <li set:html={item} />)}
+        </ul>
+      </div>
+      <div class="card">
+        <h3>{t.compat.performance.title}</h3>
+        <ul class="checks">
+          {t.compat.performance.checks.map((item) => <li set:html={item} />)}
+        </ul>
+      </div>
+      <div class="card limits">
+        <h3>{t.compat.limits.title}</h3>
+        <ul class="plain muted">
+          {t.compat.limits.items.map((item) => <li set:html={item} />)}
+        </ul>
+      </div>
+    </div>
+  </Section>
+
+  <!-- ============ INSTALL ============ -->
+  <Section id="install" eyebrow={t.install.eyebrow} title={t.install.title}>
+    <div class="split">
+      <ol class="steps">
+        {t.install.steps.map((step) => <li set:html={step} />)}
+      </ol>
+      <div class="card quickstart">
+        <h3>{t.install.quickstart.title}</h3>
+        <ol class="plain muted">
+          {t.install.quickstart.steps.map((step) => <li set:html={step} />)}
+        </ol>
+        <p class="faint fine">{t.install.quickstart.note}</p>
+      </div>
+    </div>
+  </Section>
+
+  <!-- ============ DOWNLOAD ============ -->
+  <section id="download" class="section download">
+    <div class="container">
+      <div class="download-box">
+        <div>
+          <span class="eyebrow">{t.download.eyebrow}</span>
+          <h2>{site.name} v{site.version}</h2>
+          <p class="muted">{t.download.body}</p>
+          <div class="cta">
+            <a class="btn btn-primary" href={site.links.downloadZip}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+              </svg>
+              easy_slice_print-{site.version}.zip
+            </a>
+            <a class="btn btn-ghost" href={site.links.releases} target="_blank" rel="noopener">{t.download.releases}</a>
+            <a class="btn btn-ghost" href={site.links.changelog} target="_blank" rel="noopener">{t.download.changelog}</a>
+          </div>
+          <p class="faint fine" set:html={t.download.note} />
+        </div>
+        <div class="download-meta">
+          <dl>
+            <dt>{t.download.meta.version}</dt><dd>{site.version}</dd>
+            <dt>{t.download.meta.blender}</dt><dd>{site.blenderMin} – {site.blenderMax}</dd>
+            <dt>{t.download.meta.platforms}</dt><dd>{t.download.meta.platformsValue}</dd>
+            <dt>{t.download.meta.license}</dt><dd>{site.license}</dd>
+            <dt>{t.download.meta.price}</dt><dd>{t.download.meta.priceValue}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <Section id="faq" eyebrow={t.faq.eyebrow} title={t.faq.title}>
+    <Faq items={t.faq.items} />
+  </Section>
+
+  <!-- ============ SUPPORT ============ -->
+  <Section id="support" eyebrow={t.support.eyebrow} title={t.support.title}>
+    <div class="grid grid-3">
+      <div class="card">
+        <h3>{t.support.cards.bug.title}</h3>
+        <p class="muted">{t.support.cards.bug.body}</p>
+        <a href={site.links.newIssue}>{t.support.cards.bug.link}</a>
+      </div>
+      <div class="card">
+        <h3>{t.support.cards.feature.title}</h3>
+        <p class="muted">{t.support.cards.feature.body}</p>
+        <a href={site.links.newIssue}>{t.support.cards.feature.link}</a>
+      </div>
+      <div class="card">
+        <h3>{t.support.cards.contribute.title}</h3>
+        <p class="muted">{t.support.cards.contribute.body}</p>
+        <a href={site.links.contributing}>{t.support.cards.contribute.link}</a>
+      </div>
+    </div>
+  </Section>
+</Base>
+
+<style>
+  .hero {
+    padding-block: clamp(3rem, 8vw, 6rem) clamp(3rem, 6vw, 5rem);
+  }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: clamp(2rem, 5vw, 4rem);
+    align-items: center;
+  }
+  @media (max-width: 960px) {
+    .hero-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.4rem;
+  }
+  .grad {
+    background: linear-gradient(90deg, var(--accent), #ffb37a);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lead {
+    font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+    color: var(--text-muted);
+    max-width: 56ch;
+  }
+  .cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 1.75rem 0 1rem;
+  }
+  .fine {
+    font-size: 0.85rem;
+    margin: 0;
+  }
+  .stack {
+    display: grid;
+    gap: clamp(3rem, 6vw, 5rem);
+  }
+  .steps-grid {
+    gap: 2rem;
+  }
+  .step h3 {
+    margin-top: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .num {
+    display: inline-grid;
+    place-items: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 0.85rem;
+  }
+  .step p {
+    font-size: 0.95rem;
+  }
+  .shapes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.4rem;
+  }
+  ul.plain,
+  ol.plain {
+    padding-left: 1.2rem;
+    margin: 0;
+  }
+  ul.plain li,
+  ol.plain li {
+    margin-bottom: 0.5rem;
+  }
+  .limits {
+    grid-column: 1 / -1;
+  }
+  .quickstart h3 {
+    margin-bottom: 0.9rem;
+  }
+  .download {
+    background: linear-gradient(180deg, var(--bg-elev), transparent);
+  }
+  .download-box {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 2.5rem;
+    align-items: center;
+    padding: clamp(1.5rem, 4vw, 3rem);
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background:
+      radial-gradient(600px 300px at 0% 0%, rgba(255, 138, 61, 0.16), transparent 60%),
+      var(--surface);
+  }
+  .download .eyebrow {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    margin-bottom: 0.75rem;
+  }
+  .download-meta dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem 1.25rem;
+    margin: 0;
+    padding: 1.25rem 1.5rem;
+    border-radius: var(--radius);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-size: 0.95rem;
+  }
+  .download-meta dt {
+    color: var(--text-faint);
+  }
+  .download-meta dd {
+    margin: 0;
+    font-family: var(--mono);
+  }
+  @media (max-width: 860px) {
+    .download-box {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

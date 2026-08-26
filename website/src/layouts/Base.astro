@@ -1,34 +1,82 @@
 ---
 import "../styles/global.css";
 import { site } from "../data/site";
+import { defaultLang, htmlLang, languages, localeUrl, localeUrls, useTranslations, type Lang } from "../i18n";
 import Header from "../components/Header.astro";
 import Footer from "../components/Footer.astro";
 
 interface Props {
+  lang: Lang;
   title?: string;
   description?: string;
+  /** Redirect first-time visitors to the locale matching their browser. */
+  autoDetect?: boolean;
 }
 
-const { title = `${site.name} — ${site.tagline}`, description = site.description } = Astro.props;
+const { lang, title, description, autoDetect = false } = Astro.props;
+const t = useTranslations(lang);
+
+const pageTitle = title ?? `${site.name} — ${t.meta.tagline}`;
+const pageDescription = description ?? t.meta.description;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const ogLocale: Record<Lang, string> = { en: "en_US", pt: "pt_BR", es: "es_ES" };
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={htmlLang[lang]}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{title}</title>
-    <meta name="description" content={description} />
+    {
+      /* Runs before the page paints: sends a first-time visitor to the locale
+         their browser asks for, and honours a language they picked before. */
+      autoDetect && (
+        <script is:inline define:vars={{ urls: localeUrls, fallback: defaultLang, storageKey: "esp-lang" }}>
+          (function () {
+            try {
+              var saved = localStorage.getItem(storageKey);
+              if (saved && urls[saved]) {
+                if (saved !== fallback) location.replace(urls[saved] + location.search + location.hash);
+                return;
+              }
+              var tags =
+                navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
+              for (var i = 0; i < tags.length; i++) {
+                var tag = String(tags[i] || "")
+                  .toLowerCase()
+                  .split("-")[0];
+                if (tag === fallback) return;
+                if (urls[tag]) {
+                  location.replace(urls[tag] + location.search + location.hash);
+                  return;
+                }
+              }
+            } catch (error) {
+              /* storage blocked or no navigator languages — stay on the default */
+            }
+          })();
+        </script>
+      )
+    }
+    <title>{pageTitle}</title>
+    <meta name="description" content={pageDescription} />
     <link rel="canonical" href={canonical} />
+    {languages.map((code) => <link rel="alternate" hreflang={code} href={new URL(localeUrl(code), Astro.site)} />)}
+    <link rel="alternate" hreflang="x-default" href={new URL(localeUrl(defaultLang), Astro.site)} />
     <link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
     <meta name="theme-color" content="#0d0f14" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={pageDescription} />
     <meta property="og:url" content={canonical} />
     <meta property="og:site_name" content={site.name} />
+    <meta property="og:locale" content={ogLocale[lang]} />
+    {
+      languages
+        .filter((code) => code !== lang)
+        .map((code) => <meta property="og:locale:alternate" content={ogLocale[code]} />)
+    }
     <meta name="twitter:card" content="summary" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -45,7 +93,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
         applicationCategory: "DesignApplication",
         operatingSystem: "Windows, macOS, Linux",
         softwareVersion: site.version,
-        description: site.description,
+        description: pageDescription,
+        inLanguage: htmlLang[lang],
         license: `https://spdx.org/licenses/${site.license}.html`,
         offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
         downloadUrl: site.links.downloadZip,
@@ -54,10 +103,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     />
   </head>
   <body>
-    <Header />
+    <Header lang={lang} />
     <main>
       <slot />
     </main>
-    <Footer />
+    <Footer lang={lang} />
   </body>
 </html>

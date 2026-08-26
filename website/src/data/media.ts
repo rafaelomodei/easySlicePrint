@@ -1,6 +1,10 @@
 /**
  * Every image / video slot on the site lives here.
  *
+ * This file holds only *what to show*; the `alt` text and the "what to record"
+ * hint are translated copy and live in `src/i18n/{en,pt,es}.ts` under `media.*`
+ * (merged in by `localizedMedia()` in `src/i18n/index.ts`).
+ *
  * While the real recordings are not done yet, each slot points to a
  * placeholder illustration in `public/media/` and is flagged `placeholder: true`,
  * which renders a "demo coming soon" overlay. To publish the real thing:
@@ -15,90 +19,34 @@
  */
 export type MediaKind = "image" | "video" | "youtube";
 
-export interface MediaSlot {
+/** The language-independent half of a slot: what file, how to frame it. */
+export interface MediaSource {
   kind: MediaKind;
   /** Path relative to the site root for image/video, or a video ID for youtube. */
   src: string;
-  alt: string;
   poster?: string;
-  caption?: string;
   /** CSS aspect-ratio for the frame, e.g. "16 / 9". */
   aspect?: string;
   placeholder?: boolean;
+}
+
+/** What `Media.astro` renders: a source plus the translated strings. */
+export interface MediaSlot extends MediaSource {
+  alt: string;
+  caption?: string;
   /** Shot description shown on placeholders (what to record). */
   expects?: string;
 }
 
 export const media = {
-  hero: {
-    kind: "video",
-    src: "media/placeholder-hero.svg",
-    alt: "EasySlice Print demo: drawing a freehand cut, building the parts and exploding them",
-    aspect: "16 / 9",
-    placeholder: true,
-    expects: "20–40 s screen recording: draw a Freehand cut → Build → Exploded View → Export",
-  },
-  stepCut: {
-    kind: "image",
-    src: "media/placeholder-step-1.svg",
-    alt: "Viewport while drawing a cut line over the model",
-    placeholder: true,
-    expects: "Viewport mid-draw, the cut line overlay visible",
-  },
-  stepConnectors: {
-    kind: "image",
-    src: "media/placeholder-step-2.svg",
-    alt: "Built parts in exploded view showing the pin and socket",
-    placeholder: true,
-    expects: "Built parts in Exploded View, pin and socket visible",
-  },
-  stepExport: {
-    kind: "image",
-    src: "media/placeholder-step-3.svg",
-    alt: "Export panel with the parts written as STL files",
-    placeholder: true,
-    expects: "Export panel with the folder and format, exported parts in the slicer",
-  },
-  planeCut: {
-    kind: "video",
-    src: "media/placeholder-plane.svg",
-    alt: "Plane cut: dragging a line across a model in Plan Mode",
-    placeholder: true,
-    expects: "Plan Mode: drag a Plane cut, then Edit Cut Surface and move the plane with G/R",
-  },
-  curveCut: {
-    kind: "video",
-    src: "media/placeholder-curve.svg",
-    alt: "Curve cut: drawing a curved line over the model",
-    placeholder: true,
-    expects: "Plan Mode: draw a Curve cut across the silhouette, drag a few control points",
-  },
-  freehandCut: {
-    kind: "video",
-    src: "media/placeholder-freehand.svg",
-    alt: "Freehand cut: drawing a closed loop around a neck while orbiting",
-    placeholder: true,
-    expects: "Plan Mode: Freehand loop around a neck/wrist, orbiting with MMB between strokes",
-  },
-  buildExport: {
-    kind: "video",
-    src: "media/placeholder-build.svg",
-    alt: "Build, Back to Plan, Approve and Export",
-    placeholder: true,
-    expects: "Build → parts appear → Back to Plan → tweak → Approve → Export STL",
-  },
-  quickCut: {
-    kind: "video",
-    src: "media/placeholder-quick.svg",
-    alt: "Quick Cut: one plane cut with automatic connector, no history",
-    placeholder: true,
-    expects: "Quick Cut mode: one drag, parts and connector appear immediately",
-  },
-  connectors: {
-    kind: "image",
-    src: "media/placeholder-connectors.svg",
-    alt: "Connector shapes: cylinder, tapered, hexagon, box and a custom mesh",
-    placeholder: true,
-    expects: "Close-up of the five connector shapes side by side, pins and sockets",
-  },
-} satisfies Record<string, MediaSlot>;
+  hero: { kind: "video", src: "media/placeholder-hero.svg", aspect: "16 / 9", placeholder: true },
+  stepCut: { kind: "image", src: "media/placeholder-step-1.svg", placeholder: true },
+  stepConnectors: { kind: "image", src: "media/placeholder-step-2.svg", placeholder: true },
+  stepExport: { kind: "image", src: "media/placeholder-step-3.svg", placeholder: true },
+  planeCut: { kind: "video", src: "media/placeholder-plane.svg", placeholder: true },
+  curveCut: { kind: "video", src: "media/placeholder-curve.svg", placeholder: true },
+  freehandCut: { kind: "video", src: "media/placeholder-freehand.svg", placeholder: true },
+  buildExport: { kind: "video", src: "media/placeholder-build.svg", placeholder: true },
+  quickCut: { kind: "video", src: "media/placeholder-quick.svg", placeholder: true },
+  connectors: { kind: "image", src: "media/placeholder-connectors.svg", placeholder: true },
+} satisfies Record<string, MediaSource>;

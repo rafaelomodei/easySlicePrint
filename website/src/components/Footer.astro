@@ -1,6 +1,15 @@
 ---
 import { site } from "../data/site";
-const year = new Date().getFullYear();
+import { useTranslations, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+// Point the README link at the translation we actually have.
+const readmeUrl = lang === "pt" ? site.links.readmePtBr : site.links.readme;
 ---
 
 <footer class="footer">
@@ -8,44 +17,38 @@ const year = new Date().getFullYear();
     <div class="cols">
       <div>
         <strong>{site.name}</strong>
-        <p class="muted">{site.description}</p>
-        <p class="faint small">
-          Free software under the GNU GPL v3.0 or later. {site.name} is an independent project: it is not
-          affiliated with, endorsed by or derived from any commercial add-on, and no third-party code or
-          assets are included.
-        </p>
+        <p class="muted">{t.meta.description}</p>
+        <p class="faint small">{t.footer.legal}</p>
       </div>
       <div>
-        <h4>Project</h4>
+        <h4>{t.footer.project.title}</h4>
         <ul>
-          <li><a href={site.repoUrl}>Source code</a></li>
-          <li><a href={site.links.releases}>Releases</a></li>
-          <li><a href={site.links.changelog}>Changelog</a></li>
-          <li><a href={site.links.license}>License</a></li>
+          <li><a href={site.repoUrl}>{t.footer.project.source}</a></li>
+          <li><a href={site.links.releases}>{t.footer.project.releases}</a></li>
+          <li><a href={site.links.changelog}>{t.footer.project.changelog}</a></li>
+          <li><a href={site.links.license}>{t.footer.project.license}</a></li>
         </ul>
       </div>
       <div>
-        <h4>Docs</h4>
+        <h4>{t.footer.docs.title}</h4>
         <ul>
-          <li><a href={site.links.architecture}>Architecture</a></li>
-          <li><a href={site.links.features}>Feature map</a></li>
-          <li><a href={site.links.contributing}>Contributing</a></li>
-          <li><a href={site.links.readmePtBr}>README em português</a></li>
+          <li><a href={site.links.architecture}>{t.footer.docs.architecture}</a></li>
+          <li><a href={site.links.features}>{t.footer.docs.features}</a></li>
+          <li><a href={site.links.contributing}>{t.footer.docs.contributing}</a></li>
+          <li><a href={readmeUrl}>{t.footer.docs.readme}</a></li>
         </ul>
       </div>
       <div>
-        <h4>Help</h4>
+        <h4>{t.footer.help.title}</h4>
         <ul>
-          <li><a href={site.links.newIssue}>Report a bug</a></li>
-          <li><a href={site.links.newIssue}>Request a feature</a></li>
-          <li><a href={site.links.discussions}>Discussions</a></li>
-          <li><a href={site.links.security}>Security policy</a></li>
+          <li><a href={site.links.newIssue}>{t.footer.help.bug}</a></li>
+          <li><a href={site.links.newIssue}>{t.footer.help.feature}</a></li>
+          <li><a href={site.links.discussions}>{t.footer.help.discussions}</a></li>
+          <li><a href={site.links.security}>{t.footer.help.security}</a></li>
         </ul>
       </div>
     </div>
-    <p class="faint small copy">
-      © {year} {site.author} and {site.name} contributors · Blender is a trademark of the Blender Foundation.
-    </p>
+    <p class="faint small copy">{t.footer.copyright}</p>
   </div>
 </footer>
 

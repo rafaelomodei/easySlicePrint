@@ -1,0 +1,92 @@
+---
+/**
+ * Language picker. Plain links, so it works without JavaScript; the inline
+ * script only records the choice in `localStorage` so the auto-detect redirect
+ * on the default-locale page never overrides a manual pick.
+ */
+import { languages, localeUrl, useTranslations, type Lang } from "../i18n";
+
+interface Props {
+  lang: Lang;
+  class?: string;
+}
+
+const { lang, class: className = "" } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<nav class:list={["langs", className]} aria-label={t.language.label}>
+  {
+    languages.map((code) => (
+      <a
+        class:list={["lang", { active: code === lang }]}
+        href={localeUrl(code)}
+        data-lang={code}
+        hreflang={code}
+        lang={code}
+        title={t.language.names[code]}
+        aria-current={code === lang ? "true" : undefined}
+      >
+        <span aria-hidden="true">{code.toUpperCase()}</span>
+        <span class="sr-only">{t.language.names[code]}</span>
+      </a>
+    ))
+  }
+</nav>
+
+<script is:inline>
+  // Remember the language the visitor picked, so the auto-detect redirect on
+  // the English page stops kicking in.
+  document.addEventListener("click", function (event) {
+    var target = event.target;
+    var link = target && target.closest ? target.closest("[data-lang]") : null;
+    if (!link) return;
+    try {
+      localStorage.setItem("esp-lang", link.getAttribute("data-lang"));
+    } catch (error) {
+      /* private mode / storage disabled — the link still navigates */
+    }
+  });
+</script>
+
+<style>
+  .langs {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.2rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-elev, transparent);
+  }
+  .lang {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    line-height: 1;
+  }
+  .lang:hover {
+    color: var(--text);
+    text-decoration: none;
+  }
+  .lang.active {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>

@@ -1,16 +1,22 @@
 ---
+/**
+ * GitHub Pages serves a single 404 document for the whole site, so this page
+ * stays in the default locale; the header language picker is still there.
+ */
 import Base from "../layouts/Base.astro";
-import { site } from "../data/site";
-const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+import { defaultLang, localeUrl, useTranslations } from "../i18n";
+
+const lang = defaultLang;
+const t = useTranslations(lang);
 ---
 
-<Base title={`Page not found — ${site.name}`}>
+<Base lang={lang} title={t.notFound.title}>
   <section class="section">
     <div class="container nf">
-      <span class="code">404</span>
-      <h1>That page got cut off.</h1>
-      <p class="muted">Nothing here — but the connectors still fit.</p>
-      <a class="btn btn-primary" href={`${base}/`}>Back to the start</a>
+      <span class="code">{t.notFound.code}</span>
+      <h1>{t.notFound.heading}</h1>
+      <p class="muted">{t.notFound.body}</p>
+      <a class="btn btn-primary" href={localeUrl(lang)}>{t.notFound.cta}</a>
     </div>
   </section>
 </Base>

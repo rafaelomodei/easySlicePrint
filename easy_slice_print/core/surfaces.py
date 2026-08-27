@@ -5,9 +5,16 @@
 A patch is a simple open mesh given as (verts, faces) in world space:
   * rect_patch    -> straight cut: one quad, sized independently on each axis
   * plane_patch   -> square special case of rect_patch
-  * ribbon_patch  -> curved cut: the stroke extruded along the view direction
-  * loop_patch    -> freehand cut: a closed loop drawn on the surface, filled
-                     (planar loops as an n-gon, wrap-around loops as a centroid fan)
+  * ribbon_patch  -> curved cut: the stroke, run through a spline, extruded along
+                     the view direction
+  * loop_patch    -> freehand cut: a closed loop drawn on the surface, spanned by a
+                     relaxed membrane
+
+Both curved patches are built at a higher resolution than the handful of editable
+control points behind them: the control points are put through a centripetal
+Catmull-Rom spline and, for a loop, the interior is relaxed until it is the
+smoothest surface that still ends exactly on the drawn loop. That is what keeps the
+printed cut face flat instead of showing the facets of the polyline.
 
 `slab_from_patch` thickens a patch by the cut gap (kerf) into a closed solid
 that is subtracted from the model with a boolean.
@@ -15,6 +22,10 @@ that is subtracted from the model with a boolean.
 
 import bmesh
 from mathutils import Vector
+
+SURFACE_DETAIL = 3  # spline samples generated per control point segment
+RELAX_PASSES = 40  # membrane relaxation passes for a strongly non planar loop
+MAX_LOOP_SAMPLES = 160  # boundary samples a filled loop is capped to, whatever the settings
 
 
 # ----------------------------------------------------------------------------
@@ -107,6 +118,55 @@ def plane_basis(normal):
     return u, v
 
 
+def _catmull_rom(p0, p1, p2, p3, steps, alpha=0.5):
+    """Centripetal Catmull-Rom samples on the p1..p2 span (p2 itself not included).
+
+    Centripetal (alpha=0.5) is the variant that never loops back on itself when two
+    control points sit close together - which happens all the time in a hand drawn
+    stroke resampled onto the model surface.
+    """
+    t0 = 0.0
+    t1 = t0 + max((p1 - p0).length ** alpha, 1e-6)
+    t2 = t1 + max((p2 - p1).length ** alpha, 1e-6)
+    t3 = t2 + max((p3 - p2).length ** alpha, 1e-6)
+    out = []
+    for k in range(steps):
+        t = t1 + (t2 - t1) * (k / steps)
+        a1 = p0 * ((t1 - t) / (t1 - t0)) + p1 * ((t - t0) / (t1 - t0))
+        a2 = p1 * ((t2 - t) / (t2 - t1)) + p2 * ((t - t1) / (t2 - t1))
+        a3 = p2 * ((t3 - t) / (t3 - t2)) + p3 * ((t - t2) / (t3 - t2))
+        b1 = a1 * ((t2 - t) / (t2 - t0)) + a2 * ((t - t0) / (t2 - t0))
+        b2 = a2 * ((t3 - t) / (t3 - t1)) + a3 * ((t - t1) / (t3 - t1))
+        out.append(b1 * ((t2 - t) / (t2 - t1)) + b2 * ((t - t1) / (t2 - t1)))
+    return out
+
+
+def spline_polyline(points, detail, closed=False):
+    """`detail` spline samples per segment, passing through every input point.
+
+    The control points stay exactly where the user put them; only the geometry
+    between them stops being a straight line. Open lines get a mirrored end tangent,
+    so the two tails leave the curve straight instead of curling.
+    """
+    pts = [Vector(p) for p in points]
+    m = len(pts)
+    if m < 3 or detail <= 1:
+        return pts
+    out = []
+    for i in range(m if closed else m - 1):
+        p1 = pts[i % m]
+        p2 = pts[(i + 1) % m]
+        if closed:
+            p0, p3 = pts[(i - 1) % m], pts[(i + 2) % m]
+        else:
+            p0 = pts[i - 1] if i > 0 else p1 + (p1 - p2)
+            p3 = pts[i + 2] if i + 2 < m else p2 + (p2 - p1)
+        out.extend(_catmull_rom(p0, p1, p2, p3, detail))
+    if not closed:
+        out.append(pts[-1])
+    return out
+
+
 # ----------------------------------------------------------------------------
 # patches
 # ----------------------------------------------------------------------------
@@ -138,18 +198,23 @@ def plane_patch(center, normal, u_dir, size):
     return rect_patch(center, normal, u_dir, h, (-h, h))
 
 
-def ribbon_patch(points, view_dir, depth, extend, depth_range=None):
+def ribbon_patch(points, view_dir, depth, extend, depth_range=None, detail=SURFACE_DETAIL):
     """Stroke `points` extruded along `view_dir`; both ends extended by `extend`.
 
     Without `depth_range` the ribbon spans -depth..+depth along the view
     direction; with `depth_range=(t0, t1)` it spans p + view*t0 .. p + view*t1.
     Face normals == tangent x view_dir (consistent along the ribbon).
+
+    The stroke is splined to `detail` samples per segment before it is extruded, so
+    the cut face is a smooth ruled surface rather than the flat facets of the control
+    polyline. The extension tails are added afterwards and stay straight.
     """
     pts = [Vector(p) for p in points]
     t0, t1 = (-depth, depth) if depth_range is None else depth_range
     if len(pts) < 2:
         raise ValueError("ribbon needs at least 2 points")
     d = Vector(view_dir).normalized()
+    pts = spline_polyline(pts, detail)
     if extend > 0.0:
         e0 = pts[0] - pts[1]
         e1 = pts[-1] - pts[-2]
@@ -179,43 +244,125 @@ def loop_flatness(points):
     return max(abs((p - c).dot(n)) for p in pts) / radius
 
 
-def fan_patch(points):
-    """Triangle fan from the loop centroid: keeps well shaped triangles on any loop."""
-    pts = [Vector(p) for p in points]
-    c = sum(pts, Vector((0.0, 0.0, 0.0))) / len(pts)
-    m = len(pts)
-    verts = pts + [c]
-    faces = [(i, (i + 1) % m, m) for i in range(m)]
+def _bridge_rings(outer, inner, faces):
+    """Triangulate between two closed rings of vertex indices of different lengths.
+
+    Both rings are walked by their normalised position, so the triangles stay well
+    shaped even when the inner ring carries far fewer points. Winding follows the
+    outer ring.
+    """
+    no, ni = len(outer), len(inner)
+    i = j = 0
+    while i < no or j < ni:
+        take_outer = j >= ni or (i < no and (i + 1) / no <= (j + 1) / ni)
+        if take_outer:
+            faces.append((outer[i % no], outer[(i + 1) % no], inner[j % ni]))
+            i += 1
+        else:
+            faces.append((inner[j % ni], outer[i % no], inner[(j + 1) % ni]))
+            j += 1
+
+
+def _relax(verts, faces, fixed, passes):
+    """Move every interior vertex onto the average of its neighbours; boundary pinned.
+
+    The fixed point of this iteration is the discrete minimal surface spanning the
+    boundary: on a loop that lies in a plane it is exactly that plane, and on a loop
+    drawn around the model it is the smoothest surface that still ends on the drawn
+    loop - no centroid spike, no crease where two sides meet at different heights.
+    """
+    n = len(verts)
+    if passes <= 0 or n <= fixed:
+        return verts
+    links = [set() for _ in range(n)]
+    for f in faces:
+        k = len(f)
+        for i in range(k):
+            a, b = f[i], f[(i + 1) % k]
+            links[a].add(b)
+            links[b].add(a)
+    xs = [v.x for v in verts]
+    ys = [v.y for v in verts]
+    zs = [v.z for v in verts]
+    interior = [(i, tuple(links[i]), 1.0 / max(1, len(links[i]))) for i in range(fixed, n)]
+    for _ in range(passes):
+        for i, nb, inv in interior:
+            sx = sy = sz = 0.0
+            for j in nb:
+                sx += xs[j]
+                sy += ys[j]
+                sz += zs[j]
+            xs[i] = sx * inv
+            ys[i] = sy * inv
+            zs[i] = sz * inv
+    for i in range(fixed, n):
+        verts[i] = Vector((xs[i], ys[i], zs[i]))
+    return verts
+
+
+def membrane_fill(points, rings=None, passes=RELAX_PASSES):
+    """Span a closed loop with a smooth relaxed surface. Returns (verts, faces).
+
+    The loop is filled with concentric rings shrinking towards its centroid (a fan of
+    quads split into triangles, the innermost ring closed by a single centre vertex),
+    then the interior is relaxed. The boundary vertices are the first `len(points)`
+    entries of `verts` and are never moved, so the cut still lands exactly on the
+    drawn loop.
+    """
+    bnd = [Vector(p) for p in points]
+    m = len(bnd)
+    if m < 3:
+        raise ValueError("loop needs at least 3 points")
+    centre = sum(bnd, Vector((0.0, 0.0, 0.0))) / m
+    if rings is None:
+        rings = max(2, min(24, int(round(m / 8.0))))
+    verts = list(bnd)
+    ring_idx = [list(range(m))]
+    for r in range(1, rings):
+        t = r / rings
+        count = max(3, int(round(m * (1.0 - t))))
+        idx = []
+        for k in range(count):
+            f = k * m / count
+            i0 = int(f) % m
+            p = bnd[i0].lerp(bnd[(i0 + 1) % m], f - int(f))
+            idx.append(len(verts))
+            verts.append(p.lerp(centre, t))
+        ring_idx.append(idx)
+    centre_idx = len(verts)
+    verts.append(centre.copy())
+    faces = []
+    for r in range(len(ring_idx) - 1):
+        _bridge_rings(ring_idx[r], ring_idx[r + 1], faces)
+    last = ring_idx[-1]
+    for k in range(len(last)):
+        faces.append((last[k], last[(k + 1) % len(last)], centre_idx))
+    _relax(verts, faces, m, passes)
     return verts, faces
 
 
-def loop_patch(points, flat_tol=0.2):
-    """Fill a closed loop with triangles. Returns (verts, faces).
+def loop_patch(points, detail=SURFACE_DETAIL, passes=None):
+    """Fill a closed loop with a smooth surface. Returns (verts, faces).
 
-    A loop drawn from a single viewpoint stays near a plane and is filled as one
-    n-gon. A loop drawn while orbiting - front, far side, back to the front - is
-    strongly non planar; the n-gon fill degenerates into slivers there, so those
-    are filled with a fan from the loop centroid instead.
+    The loop itself is splined first, so the boundary follows the control points
+    without the corners a hand drawn stroke leaves behind, and the inside is spanned
+    by `membrane_fill`. A loop drawn from one viewpoint comes out as flat as a plane
+    cut; a loop drawn while orbiting - front, far side, back to the front - comes out
+    as a smooth saddle instead of a cone, so the printed faces still mate.
     """
     pts = [Vector(p) for p in points]
     if len(pts) < 3:
         raise ValueError("loop needs at least 3 points")
-    if loop_flatness(pts) > flat_tol:
-        return fan_patch(pts)
-    bm = bmesh.new()
-    bverts = [bm.verts.new(p) for p in pts]
-    try:
-        face = bm.faces.new(bverts)
-    except ValueError:
-        bm.free()
-        raise ValueError("loop is degenerate") from None
-    bmesh.ops.triangulate(bm, faces=[face], quad_method='BEAUTY', ngon_method='BEAUTY')
-    bm.verts.ensure_lookup_table()
-    bm.verts.index_update()
-    verts = [v.co.copy() for v in bm.verts]
-    faces = [tuple(v.index for v in f.verts) for f in bm.faces]
-    bm.free()
-    return verts, faces
+    pts = dedupe_polyline(spline_polyline(pts, detail, closed=True), 1e-9)
+    if len(pts) < 3:
+        raise ValueError("loop is degenerate")
+    if len(pts) > MAX_LOOP_SAMPLES:
+        # the fill grows with the square of the boundary: keep the worst case bounded
+        pts = resample_polyline(pts, MAX_LOOP_SAMPLES, closed=True)
+    if passes is None:
+        # a flat loop is already solved by the initial fill; a wrap-around one is not
+        passes = max(8, int(round(RELAX_PASSES * min(1.0, 0.2 + loop_flatness(pts) * 4.0))))
+    return membrane_fill(pts, passes=passes)
 
 
 def patch_normal(verts, faces):

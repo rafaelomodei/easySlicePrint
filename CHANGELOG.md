@@ -6,6 +6,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-27
+
+### Added
+- *Surface Detail* setting (default 3): how many spline samples are built between two control
+  points. The cut surface is generated at that resolution instead of at the resolution of the
+  editable control points. Set it to 1 for the old raw polyline.
+- The pointer now says which tool is running: a blade over the Plane Cut, and the pencil (paint
+  brush) cursor while a Curve or Freehand stroke is being drawn and while control points are being
+  edited. The normal pointer comes back when the tool ends, whether it was confirmed or cancelled.
+
+### Changed
+- Curve and Freehand cuts now produce a smooth cut surface. The control points are run through a
+  centripetal Catmull-Rom spline (`surfaces.spline_polyline`) before the ribbon is extruded, and a
+  freehand loop is spanned by a relaxed membrane (`surfaces.membrane_fill`) instead of an n-gon
+  triangulation or a centroid fan: concentric rings are dropped inside the loop and every interior
+  vertex is iterated onto the average of its neighbours with the boundary pinned. The fixed point
+  of that iteration is the minimal surface through the drawn loop - dead flat for a loop drawn
+  from a single viewpoint, a smooth saddle for a loop drawn while orbiting. Printed faces come out
+  smooth and mate properly, instead of showing the facets and the centre spike of the old fill.
+- *Smoothing* now also applies to the Curve Cut stroke, which was hard-coded to a single light
+  pass. It takes the shake and the model's own triangle facets out of the drawn line.
+- Dragging a point in *Edit Cut Surface* rebuilds the preview at half resolution while the mouse
+  is down and at full resolution on release, so the editor stays responsive on dense surfaces.
+
 ## [0.2.0] - 2026-08-26
 
 ### Added
@@ -55,6 +79,7 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rafaelomodei/easySlicePrint/releases/tag/v0.1.0

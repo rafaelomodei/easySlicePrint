@@ -182,6 +182,89 @@ def test_loop_cut():
     check(mx_b.z > 8.0 + 0.5, "pin on side B protrudes upward into A's socket region")
 
 
+def patch_edges(faces):
+    """(boundary edges, non-manifold edges) of an open patch."""
+    from collections import Counter
+
+    count = Counter()
+    for f in faces:
+        k = len(f)
+        for i in range(k):
+            a, b = f[i], f[(i + 1) % k]
+            count[(min(a, b), max(a, b))] += 1
+    return sum(1 for c in count.values() if c == 1), sum(1 for c in count.values() if c > 2)
+
+
+def worst_kink(verts, faces):
+    """Largest angle in degrees between two triangles sharing an edge."""
+    from collections import defaultdict
+
+    share = defaultdict(list)
+    for k, f in enumerate(faces):
+        for i in range(len(f)):
+            a, b = f[i], f[(i + 1) % len(f)]
+            share[(min(a, b), max(a, b))].append(k)
+
+    def nor(f):
+        return (verts[f[1]] - verts[f[0]]).cross(verts[f[2]] - verts[f[0]]).normalized()
+
+    worst = 0.0
+    for fs in share.values():
+        if len(fs) == 2:
+            d = max(-1.0, min(1.0, nor(faces[fs[0]]).dot(nor(faces[fs[1]]))))
+            worst = max(worst, math.degrees(math.acos(d)))
+    return worst
+
+
+def test_smooth_surfaces():
+    print("== smooth cut surfaces")
+    # the spline must pass through every control point and take the corners out
+    ctrl = [Vector((i, math.sin(i), 0.0)) for i in range(6)]
+    sp = surfaces.spline_polyline(ctrl, 4)
+    check(len(sp) == 5 * 4 + 1, f"spline sample count {len(sp)}")
+    check(all(min((p - c).length for p in sp) < 1e-9 for c in ctrl), "spline passes through the control points")
+
+    def max_turn(poly):
+        m = 0.0
+        for i in range(1, len(poly) - 1):
+            a = (poly[i] - poly[i - 1]).normalized()
+            b = (poly[i + 1] - poly[i]).normalized()
+            m = max(m, math.degrees(math.acos(max(-1.0, min(1.0, a.dot(b))))))
+        return m
+
+    stroke = [Vector((10.0, -14 + 28 * i / 11, 5.0 + 3.0 * math.sin(i / 11 * math.pi * 2))) for i in range(12)]
+    check(max_turn(surfaces.spline_polyline(stroke, 3)) < max_turn(stroke) * 0.6, "spline flattens the polyline kinks")
+
+    # a loop drawn from one viewpoint has to come out as flat as a plane cut
+    flat = [
+        Vector((10.6 * math.cos(a), 10.6 * math.sin(a), 8.0 + 4.0 * math.cos(a)))
+        for a in (2 * math.pi * i / 24 for i in range(24))
+    ]
+    verts, faces = surfaces.loop_patch(flat)
+    boundary, nonmanifold = patch_edges(faces)
+    check(nonmanifold == 0, f"membrane fill is manifold ({nonmanifold} bad edges)")
+    check(boundary > 0, "membrane fill has an open boundary")
+    n = surfaces.patch_normal(verts, faces)
+    c = surfaces.patch_center(verts)
+    check(max(abs((v - c).dot(n)) for v in verts) < 1e-5, "planar loop is filled dead flat")
+
+    # a loop drawn while orbiting must be a smooth saddle, not a cone
+    saddle = [
+        Vector((10.0 * math.cos(a), 10.0 * math.sin(a), 6.0 * math.sin(2 * a)))
+        for a in (2 * math.pi * i / 32 for i in range(32))
+    ]
+    verts, faces = surfaces.loop_patch(saddle)
+    _b, nonmanifold = patch_edges(faces)
+    check(nonmanifold == 0, f"saddle fill is manifold ({nonmanifold} bad edges)")
+    kink = worst_kink(verts, faces)
+    check(kink < 25.0, f"saddle fill stays smooth (worst kink {kink:.1f} deg)")
+    check(abs(verts[-1].z) < 0.5, f"no centroid spike (centre z {verts[-1].z:.2f})")
+
+    # the drawn loop itself is never moved
+    src = surfaces.dedupe_polyline(surfaces.spline_polyline(saddle, surfaces.SURFACE_DETAIL, closed=True), 1e-9)
+    check(max((verts[i] - src[i]).length for i in range(len(src))) < 1e-9, "boundary vertices stay on the drawn loop")
+
+
 def test_two_contacts():
     print("== two contact cut (base separate)")
     reset_scene()
@@ -275,6 +358,7 @@ if __name__ == "__main__":
     test_straight_cut_with_pin()
     test_ribbon_cut()
     test_loop_cut()
+    test_smooth_surfaces()
     test_two_contacts()
     test_custom_connector_and_remesh()
     print(f"\n{len(FAILS)} failure(s) in {time.time() - t:.1f}s")

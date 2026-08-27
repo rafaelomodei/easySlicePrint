@@ -11,7 +11,7 @@ from mathutils import Vector
 
 from . import draw, plan
 from .core import cutting, mesh_utils
-from .ops_tools import NAV_EVENTS, dist2d, window_region
+from .ops_tools import CURSOR_DRAW, NAV_EVENTS, dist2d, restore_cursor, set_cursor, window_region
 
 
 def active_record(context):
@@ -164,6 +164,7 @@ class ESP_OT_edit_surface(bpy.types.Operator):
             self.report({'ERROR'}, "Run this from the 3D Viewport")
             return {'CANCELLED'}
         self.area = context.area
+        self.window = context.window
         self.region = window_region(self.area)
         self.rv3d = self.region.data
         self.sobj = sobj
@@ -183,6 +184,7 @@ class ESP_OT_edit_surface(bpy.types.Operator):
         self.changed = False
         self._handle = bpy.types.SpaceView3D.draw_handler_add(self._draw_cb, (context,), 'WINDOW', 'POST_PIXEL')
         context.window_manager.modal_handler_add(self)
+        set_cursor(self.window, CURSOR_DRAW)
         context.workspace.status_text_set(
             "Drag point: LMB | Add: Ctrl+LMB | Delete: X | Slide all: G | Reset: R | Undo: Ctrl+Z | Finish: Enter / Esc"
         )
@@ -211,9 +213,9 @@ class ESP_OT_edit_surface(bpy.types.Operator):
                 return loc
         return view3d_utils.region_2d_to_location_3d(self.region, self.rv3d, coord, fallback_world)
 
-    def commit(self, context):
+    def commit(self, context, draft=False):
         plan.set_surface_points(self.sobj, self.points)
-        plan.rebuild_surface(self.sobj)
+        plan.rebuild_surface(self.sobj, draft)
         self.changed = True
 
     def push_history(self):
@@ -253,6 +255,7 @@ class ESP_OT_edit_surface(bpy.types.Operator):
         if self._handle is not None:
             bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
             self._handle = None
+        restore_cursor(getattr(self, "window", None))
         context.workspace.status_text_set(None)
         self.area.tag_redraw()
 
@@ -275,6 +278,7 @@ class ESP_OT_edit_surface(bpy.types.Operator):
         if event.type in {'RET', 'NUMPAD_ENTER'} and event.value == 'PRESS':
             if self.slide is not None:
                 self.slide = None
+                self.commit(context)
                 self.push_history()
                 return {'RUNNING_MODAL'}
             self.end(context)
@@ -285,7 +289,7 @@ class ESP_OT_edit_surface(bpy.types.Operator):
             if self.drag is not None:
                 w = self.surface_pos(context, self.mouse, self.mw @ self.points[self.drag])
                 self.points[self.drag] = self.inv @ w
-                self.commit(context)
+                self.commit(context, draft=True)
             elif self.slide is not None:
                 start, base = self.slide
                 ref = self.mw @ base[0]
@@ -293,13 +297,14 @@ class ESP_OT_edit_surface(bpy.types.Operator):
                     self.region, self.rv3d, self.mouse, ref
                 ) - view3d_utils.region_2d_to_location_3d(self.region, self.rv3d, start, ref)
                 self.points = [self.inv @ ((self.mw @ p) + delta) for p in base]
-                self.commit(context)
+                self.commit(context, draft=True)
             else:
                 self.hover = self.nearest_point(self.mouse)
         elif event.type == 'LEFTMOUSE':
             if event.value == 'PRESS':
                 if self.slide is not None:
                     self.slide = None
+                    self.commit(context)
                     self.push_history()
                 elif event.ctrl:
                     seg = self.nearest_segment(self.mouse)
@@ -312,6 +317,7 @@ class ESP_OT_edit_surface(bpy.types.Operator):
                     self.drag = self.hover
             elif event.value == 'RELEASE' and self.drag is not None:
                 self.drag = None
+                self.commit(context)  # drag over: rebuild at full resolution
                 self.push_history()
         elif event.type in {'X', 'DEL'} and event.value == 'PRESS':
             min_pts = 3 if self.closed else 2

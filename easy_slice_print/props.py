@@ -203,7 +203,10 @@ class ESP_Settings(bpy.types.PropertyGroup):
     tool: EnumProperty(name="Cut Tool", items=TOOL_ITEMS, default='STRAIGHT')
     freehand_smoothing: FloatProperty(
         name="Smoothing",
-        description="Smooth the freehand loop before filling it",
+        description=(
+            "Smooth the drawn stroke before the cut surface is built. Takes the shake and the "
+            "faceting of the model's own triangles out of a Curve or Freehand cut"
+        ),
         default=0.35,
         min=0.0,
         max=1.0,
@@ -229,6 +232,18 @@ class ESP_Settings(bpy.types.PropertyGroup):
     )
     control_points: IntProperty(
         name="Control Points", description="Editable points for curve and freehand cuts", default=20, min=4, max=96
+    )
+    surface_detail: IntProperty(
+        name="Surface Detail",
+        description=(
+            "Spline samples built between two control points. The cut surface is generated at "
+            "this resolution and its inside is relaxed flat, so a Curve or Freehand cut prints "
+            "as smooth as a Plane cut instead of showing the facets of the control polyline. "
+            "Set it to 1 for the raw polyline"
+        ),
+        default=3,
+        min=1,
+        max=12,
     )
     two_contact: BoolProperty(
         name="Two Contacts / Base Split",

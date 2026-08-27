@@ -81,6 +81,7 @@ class ESP_PT_tools(ESPPanel, bpy.types.Panel):
             col.prop(s, "surface_origin", text="Origin")
         col.prop(s, "freehand_smoothing", slider=True)
         col.prop(s, "control_points")
+        col.prop(s, "surface_detail")
         layout.prop(s, "two_contact", toggle=True, icon='MOD_MIRROR')
         if s.two_contact:
             layout.label(text="Draw contact 1, then contact 2 with any tool", icon='INFO')

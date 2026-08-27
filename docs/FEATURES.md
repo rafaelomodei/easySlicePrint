@@ -12,8 +12,10 @@ below is an original implementation; nothing was copied.
 | Curved cut following a drawn line | **Curve Cut** (stroke → ribbon extruded along the view) | `ESP_OT_cut_curved` |
 | Cut that wraps around a limb / neck | **Freehand Cut** (closed loop on the surface, loop filled) | `ESP_OT_cut_freehand` |
 | Reach the far side of the model while marking | orbit between strokes; the loop is kept in world space, hidden parts drawn faded, auto-close only on a visible start point, `Ctrl+Z` undoes a stroke, `Enter`/`C` close from any angle | `ESP_OT_cut_freehand` |
-| Fill a loop drawn across several viewpoints | non-planar loops filled with a centroid fan instead of an n-gon | `surfaces.loop_patch` |
-| Control the freehand smoothing / editable point count | *Smoothing* and *Control Points* | `ESP_PT_tools` |
+| Fill a loop drawn across several viewpoints | the loop is spanned by a relaxed membrane (concentric rings, interior smoothed onto the average of its neighbours, boundary pinned) | `surfaces.membrane_fill` |
+| Cut faces that print smooth enough to mate | control points are splined and the fill relaxed, so a Curve/Freehand cut face is as smooth as a Plane cut instead of showing the facets of the control polyline | `surfaces.spline_polyline`, `surfaces.loop_patch` |
+| Control the stroke smoothing / editable point count / surface resolution | *Smoothing*, *Control Points* and *Surface Detail* | `ESP_PT_tools` |
+| Know which tool has the mouse | the pointer becomes a blade for the Plane Cut and a pencil while drawing a stroke or editing points | `ops_tools.set_cursor` |
 | Separate a figure from its base (two contacts at once) | **Two Contacts / Base Split** toggle; both contacts drawn in one go, one record `Base Split NNN` | `settings.two_contact` |
 | Automatically start the next cut | **Chain Cuts** | `settings.chain_cuts` |
 | Editable list of planned cuts: enable, hide, delete, rename | **Planned Cuts** UIList (Ready ☑, eye, ✕, name) | `ESP_UL_cuts` |

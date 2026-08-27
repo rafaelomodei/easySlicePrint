@@ -44,6 +44,34 @@ NAV_EVENTS = {
 }
 
 
+# Blender has no pencil cursor of its own: PAINT_BRUSH is the one grease pencil and the
+# paint modes use, and it reads as a pencil over the model. KNIFE is the real blade.
+CURSOR_DRAW = 'PAINT_BRUSH'
+CURSOR_CUT = 'KNIFE'
+
+
+def set_cursor(window, cursor):
+    """Swap the pointer for the tool's own cursor; an unknown name falls back to a crosshair."""
+    if window is None:
+        return
+    try:
+        window.cursor_modal_set(cursor)
+    except (TypeError, ValueError):
+        try:
+            window.cursor_modal_set('CROSSHAIR')
+        except Exception:
+            pass
+
+
+def restore_cursor(window):
+    if window is None:
+        return
+    try:
+        window.cursor_modal_restore()
+    except Exception:
+        pass
+
+
 def window_region(area):
     for r in area.regions:
         if r.type == 'WINDOW':
@@ -111,6 +139,7 @@ def quick_cut(context, target, contacts):
 class CutToolBase:
     bl_options = {'REGISTER', 'UNDO'}
     kind = 'STRAIGHT'
+    cursor = CURSOR_CUT
 
     @classmethod
     def poll(cls, context):
@@ -147,6 +176,7 @@ class CutToolBase:
         self.reset_stroke()
         self._handle = bpy.types.SpaceView3D.draw_handler_add(self._draw_cb, (context,), 'WINDOW', 'POST_PIXEL')
         context.window_manager.modal_handler_add(self)
+        set_cursor(self.window, self.cursor)
         self.update_status(context)
         return {'RUNNING_MODAL'}
 
@@ -163,6 +193,7 @@ class CutToolBase:
         if getattr(self, "_handle", None) is not None:
             bpy.types.SpaceView3D.draw_handler_remove(self._handle, 'WINDOW')
             self._handle = None
+        restore_cursor(getattr(self, "window", None))
         context.workspace.status_text_set(None)
         try:
             self.area.header_text_set(None)
@@ -412,6 +443,7 @@ class ESP_OT_cut_curved(CutToolBase, bpy.types.Operator):
     bl_label = "Curve Cut"
     bl_description = "Draw a curved line over the model; the cut follows the line straight through the model"
     kind = 'CURVED'
+    cursor = CURSOR_DRAW
 
     def status_text(self):
         return "LMB drag: draw the curve across the model (cross the whole silhouette)"
@@ -463,7 +495,7 @@ class ESP_OT_cut_curved(CutToolBase, bpy.types.Operator):
             self.reset_stroke()
             return None
         pts = surfaces.resample_polyline(pts, settings.control_points)
-        pts = surfaces.smooth_polyline(pts, 0.15, iterations=1)
+        pts = surfaces.smooth_polyline(pts, settings.freehand_smoothing)
         avg = Vector((0.0, 0.0, 0.0))
         for i in range(len(pts) - 1):
             avg += (pts[i + 1] - pts[i]).cross(d)
@@ -480,7 +512,10 @@ class ESP_OT_cut_curved(CutToolBase, bpy.types.Operator):
         data.view_dir = d
         data.depth_range = (span[0] - margin, span[1] + margin)
         data.extend = margin
-        data.verts, data.faces = surfaces.ribbon_patch(pts, d, 0.0, data.extend, depth_range=data.depth_range)
+        data.detail = settings.surface_detail
+        data.verts, data.faces = surfaces.ribbon_patch(
+            pts, d, 0.0, data.extend, depth_range=data.depth_range, detail=data.detail
+        )
         if hits:
             mid_i = len(stroke) // 2
             _idx, loc = min(hits, key=lambda h: abs(h[0] - mid_i))
@@ -508,6 +543,7 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
         "the far side, then keep drawing: the loop is filled and used as the cut surface"
     )
     kind = 'FREEHAND'
+    cursor = CURSOR_DRAW
     CLOSE_PX = 12.0
     MIN_STROKE = 3  # samples the current stroke must have before it may snap the loop closed
 
@@ -632,7 +668,7 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
         if n.z < -1e-6 or (abs(n.z) <= 1e-6 and n.x < 0):
             pts.reverse()
         try:
-            verts, faces = surfaces.loop_patch(pts)
+            verts, faces = surfaces.loop_patch(pts, detail=settings.surface_detail)
         except ValueError as e:
             self.report({'WARNING'}, f"Could not fill the loop: {e}")
             self.reset_stroke()
@@ -640,6 +676,7 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
         data = plan.ContactData('FREEHAND')
         data.points = pts
         data.margin = margin
+        data.detail = settings.surface_detail
         data.verts, data.faces = verts, faces
         data.center_hint = centroid
         data.anchor = locs[0]

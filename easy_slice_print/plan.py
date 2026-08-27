@@ -33,6 +33,7 @@ class ContactData:
         self.depth_range = (0.0, 0.0)
         self.extend = 0.0
         self.margin = 0.0
+        self.detail = surfaces.SURFACE_DETAIL  # spline samples per control point segment
         self.hit = None  # where the stroke touched the model
         self.through = None  # direction through the model at `hit`
         self.center_hint = None  # alternative: a point inside the part
@@ -198,6 +199,7 @@ def create_surface_object(context, name, data, target=None):
     obj["esp_depth"] = list(data.depth_range)
     obj["esp_extend"] = data.extend
     obj["esp_margin"] = data.margin
+    obj["esp_detail"] = data.detail
     if data.hit is not None:
         obj["esp_hit"] = list(data.hit)
         obj["esp_through"] = list(data.through)
@@ -216,15 +218,26 @@ def set_surface_points(obj, points):
     obj["esp_points"] = [c for p in points for c in p]
 
 
-def rebuild_surface(obj):
+def rebuild_surface(obj, draft=False):
+    """Regenerate the patch from its control points.
+
+    `draft` halves the spline resolution and cuts the membrane relaxation short; it is
+    what runs while a control point is being dragged, so the preview keeps up with the
+    mouse. The full surface is rebuilt as soon as the drag ends.
+    """
     kind = obj.get("esp_kind", 'STRAIGHT')
     pts = surface_points(obj)
+    detail = int(obj.get("esp_detail", surfaces.SURFACE_DETAIL))
+    if draft:
+        detail = max(1, detail // 2)
     if kind == 'CURVED' and len(pts) >= 2:
         # the control points are local to the object; the stored view direction is world
         view = (obj.matrix_basis.to_3x3().inverted_safe() @ Vector(obj["esp_view"])).normalized()
-        verts, faces = surfaces.ribbon_patch(pts, view, 0.0, obj["esp_extend"], depth_range=tuple(obj["esp_depth"]))
+        verts, faces = surfaces.ribbon_patch(
+            pts, view, 0.0, obj["esp_extend"], depth_range=tuple(obj["esp_depth"]), detail=detail
+        )
     elif kind == 'FREEHAND' and len(pts) >= 3:
-        verts, faces = surfaces.loop_patch(pts)
+        verts, faces = surfaces.loop_patch(pts, detail=detail, passes=6 if draft else None)
     else:
         return
     me = obj.data

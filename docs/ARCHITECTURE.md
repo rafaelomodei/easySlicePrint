@@ -26,14 +26,18 @@ easy_slice_print/
    * plane: one quad built around the drawn segment - as wide as the line, and only as deep as
      the model reaches underneath it (rays marched through every crossing), plus *Surface
      Margin* on each side (`surfaces.rect_patch`, `CutToolBase.model_span`);
-   * curve: the stroke (resampled to *Control Points*) extruded along the view direction, over the
-     depth the model occupies under the stroke and extended past its ends by *Surface Margin*
-     (`surfaces.ribbon_patch`);
+   * curve: the stroke (resampled to *Control Points*, then splined to *Surface Detail* samples
+     per segment) extruded along the view direction, over the depth the model occupies under the
+     stroke and extended past its ends by *Surface Margin* (`surfaces.ribbon_patch`);
    * freehand: the loop drawn on the surface (over as many strokes and viewpoints as needed —
      samples are stored in world space, so orbiting between strokes keeps the loop), pushed a
-     little outward along the surface normals, smoothed, resampled, filled with triangles
-     (`surfaces.loop_patch`: an n-gon while the loop stays near a plane, a centroid fan once it
-     wraps around the model, where the n-gon fill would degenerate into slivers).
+     little outward along the surface normals, smoothed, resampled, splined, and spanned by a
+     relaxed membrane (`surfaces.loop_patch` → `surfaces.membrane_fill`: concentric rings closed
+     by a centre vertex, then the interior vertices are iterated onto the average of their
+     neighbours with the boundary pinned). The fixed point of that iteration is the discrete
+     minimal surface through the drawn loop: dead flat for a loop drawn from one viewpoint,
+     a smooth saddle for a loop that wraps around the model. Nothing but a straight polyline is
+     ever handed to the boolean, which is what keeps the printed cut face from showing facets.
 2. **Kerf slab** — the patch is thickened by *Cut Gap* along its vertex normals into a closed
    solid (`surfaces.slab_from_patch`).
 3. **Split** — `model − slab` (Boolean modifier, *Manifold* solver when available, *Exact*

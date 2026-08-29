@@ -118,6 +118,47 @@ def curve_contact(obj, diag):
     return d
 
 
+def test_printer_fit():
+    """The Fit preset must decide how much wider the socket comes out than the pin."""
+    print("== printer fit / clearance")
+    from mathutils import Matrix
+
+    from easy_slice_print.core import connectors
+
+    sc = reset_scene()
+    base = plan.printer_clearance_mm(bpy.context)
+    check(abs(base - 0.10) < 1e-9, f"printer clearance defaults to 0.10 mm (got {base})")
+    check(sc.esp.fit_preset == 'SNUG', f"new cuts start on the Snug fit (got {sc.esp.fit_preset})")
+
+    expected = {'PRESS': 0.05, 'SNUG': 0.10, 'EASY': 0.15, 'LOOSE': 0.25}
+    for preset, want in expected.items():
+        got = plan.preset_clearance_mm(bpy.context, preset)
+        check(abs(got - want) < 1e-9, f"{preset} fit -> {want:.2f} mm per side (got {got:.3f})")
+
+    # the preset has to land in the field the panel shows and the build reads
+    for preset, want in expected.items():
+        sc.esp.fit_preset = preset
+        check(abs(sc.esp.clearance_mm - want) < 1e-6, f"{preset} written into the gap field")
+    sc.esp.fit_preset = 'CUSTOM'
+    sc.esp.clearance_mm = 0.42
+    plan.apply_fit(bpy.context, sc.esp)
+    check(abs(sc.esp.clearance_mm - 0.42) < 1e-6, "Custom fit keeps the typed gap")
+
+    # what actually gets printed: the socket cavity against the pin, same call the build makes
+    matrix = connectors.connector_matrix(Vector((0, 0, 0)), Vector((0, 0, 1)), 6.0, 7.0)
+    for gap in (0.05, 0.10, 0.25):
+        pin = connectors.connector_mesh('CYLINDER', None, matrix, "pin")
+        socket = connectors.connector_mesh('CYLINDER', None, matrix, "socket", radial_extra=gap)
+        pmn, pmx = mesh_utils.mesh_bounds(pin)
+        smn, smx = mesh_utils.mesh_bounds(socket)
+        widened = (smx.x - smn.x) - (pmx.x - pmn.x)
+        check(abs(widened - 2.0 * gap) < 1e-4, f"gap {gap:.2f} -> socket {widened:.3f} mm wider (want {2 * gap:.2f})")
+        # the pin itself must never change: only the socket opens up
+        check(abs((pmx.x - pmn.x) - 6.0) < 1e-4, f"pin stays {pmx.x - pmn.x:.3f} mm across at gap {gap:.2f}")
+        for m in (pin, socket):
+            mesh_utils.remove_mesh(m)
+
+
 def test_register():
     print("== register")
     easy_slice_print.register()
@@ -248,6 +289,7 @@ if __name__ == "__main__":
     test_register()
     test_plan_workflow()
     test_quick_mode()
+    test_printer_fit()
     test_unregister()
     print(f"\n{len(FAILS)} failure(s)")
     for f in FAILS:

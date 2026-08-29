@@ -87,7 +87,7 @@ Tested headless on Blender 4.2.23 LTS and 5.2.1 LTS (CI runs both). Works on Win
      strokes is drawn dim. `Ctrl+Z` (or `Backspace`) undoes the last stroke. Close the loop
      on the green start point — it only snaps when that point is actually visible — or with
      `Enter` / `C` from any angle.
-5. Connector panel: shape, size, pin side, cut gap, clearance.
+5. Connector panel: shape, size, pin side, cut gap, and the **Fit** of the printed joint.
 6. **Plan mode**: select a cut in the list to edit it — *Edit Cut Surface* (G/R/S for planes, drag
    points for curves; each cut surface has its own origin at its centre, so `R` and `S` pivot on the
    surface — set *Surface Origin* to *Target Object* if you would rather they share the model's pivot), *Select Connector* then G/R/S, *Reset*, *Swap* the pin side. Untick **Ready** to
@@ -95,7 +95,12 @@ Tested headless on Blender 4.2.23 LTS and 5.2.1 LTS (CI runs both). Works on Win
 7. **Build** → parts appear in `ESP_Built_<name>`. **Back to Plan** to change anything, **Approve** to finish.
 8. **Exploded View** to check the fit, **Export** to write the files.
 
-Connector clearance is printer specific (0.15–0.4 mm is typical). Test print a small piece first.
+**Printed fit.** Set *Printer Clearance* once in the add-on preferences (Edit › Preferences ›
+Add-ons › EasySlice Print) — how much room your printer needs between a pin and its socket, on
+each side. 0.1 mm suits most FDM printers; print one test joint and leave it alone. Each cut then
+picks how tight that joint should be with **Fit**: *Press* (0.5×), *Snug* (1×, the default),
+*Easy* (1.5×), *Loose* (2.5×) or *Custom* to type the gap. The panel shows how much wider the
+socket ends up than the pin — twice the gap, since it is left on each side.
 
 ### Custom connectors
 

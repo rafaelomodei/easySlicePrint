@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 Rafael Omodei and EasySlice Print contributors
 import bpy
-from bpy.props import BoolProperty, EnumProperty
+from bpy.props import BoolProperty, EnumProperty, FloatProperty
 
 from .core import mesh_utils
 
@@ -38,9 +38,29 @@ class ESP_Preferences(bpy.types.AddonPreferences):
         default='SCENE',
     )
     check_mesh: BoolProperty(name="Warn about non-manifold meshes before cutting", default=True)
+    printer_clearance_mm: FloatProperty(
+        name="Printer Clearance",
+        description=(
+            "How much room your printer needs between a pin and its socket for the printed parts "
+            "to fit together, measured on each side of the pin. This is the number that decides "
+            "whether a connector goes home firmly, rattles, or will not go in at all - it belongs "
+            "to the printer and the filament, not to the model, which is why it lives here and is "
+            "set once. 0.1 mm suits most FDM printers; raise it if your parts come out too tight. "
+            "Each cut then picks how tight that joint should be with its Fit setting"
+        ),
+        default=0.10,
+        min=0.0,
+        soft_max=0.6,
+        precision=3,
+        step=1,
+    )
 
     def draw(self, context):
         layout = self.layout
+        box = layout.box()
+        box.label(text="Printer profile", icon='TOOL_SETTINGS')
+        box.prop(self, "printer_clearance_mm")
+        box.label(text="Print a test joint once, then leave it alone.", icon='INFO')
         layout.prop(self, "solver")
         layout.prop(self, "unit_mode")
         layout.prop(self, "check_mesh")

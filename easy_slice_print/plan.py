@@ -338,6 +338,38 @@ def apply_preset(context, rec):
     rec.pin_height_mm = h_mm
 
 
+def printer_clearance_mm(context):
+    """The clearance this printer needs on each side of a pin, from the preferences."""
+    return pref(context, "printer_clearance_mm", 0.10)
+
+
+def preset_clearance_mm(context, fit_preset):
+    return printer_clearance_mm(context) * connectors.fit_factor(fit_preset)
+
+
+_applying_fit = False
+
+
+def apply_fit(context, src):
+    """Write the Fit preset into the gap field, so the number in the panel is the real one.
+
+    `src` is a cut record or the scene defaults - both carry the connector settings. The
+    write lands on a property that has an update callback of its own, which calls back in
+    here, so the guard and the tolerance check keep it from looping.
+    """
+    global _applying_fit
+    if src.fit_preset == 'CUSTOM' or _applying_fit:
+        return
+    target = preset_clearance_mm(context, src.fit_preset)
+    if abs(src.clearance_mm - target) <= 1e-6:
+        return
+    _applying_fit = True
+    try:
+        src.clearance_mm = target
+    finally:
+        _applying_fit = False
+
+
 def copy_connector_props(src, dst):
     for key in connector_props():
         try:
@@ -396,6 +428,7 @@ def add_record(context, target, cut_type, contacts):
             _set_contact_attr(rec, "normal", i, normal)
             _set_contact_attr(rec, "inscribed", i, inscribed)
         apply_preset(context, rec)
+        apply_fit(context, rec)
         for i in range(len(contacts)):
             matrix = auto_pin_matrix(context, rec, i)
             pin = create_pin_object(context, f"ESP_Pin_{rec.name}_{'AB'[i]}", rec.shape, matrix)
@@ -416,6 +449,7 @@ def on_record_settings_changed(context, rec):
     _suspend += 1
     try:
         apply_preset(context, rec)
+        apply_fit(context, rec)
         for i in range(contact_count(rec)):
             pin = bpy.data.objects.get(_contact_attr(rec, "pin", i))
             if pin is None:
@@ -578,6 +612,7 @@ def set_plan_hidden(context, hidden):
 
 
 def record_spec(context, rec, settings, remesh=True):
+    apply_fit(context, rec)
     contacts = []
     shape, custom = connectors.resolve_shape(rec.shape)
     for i in range(contact_count(rec)):
@@ -606,6 +641,7 @@ def record_spec(context, rec, settings, remesh=True):
 def quick_spec(context, target, contacts):
     """CutSpec for Quick mode straight from the tool output and the scene defaults."""
     settings = context.scene.esp
+    apply_fit(context, settings)
     shape, custom = connectors.resolve_shape(settings.shape)
     specs = []
     for data in contacts:

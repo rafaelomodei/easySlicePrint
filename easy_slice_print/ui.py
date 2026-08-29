@@ -135,12 +135,23 @@ class ESP_PT_fit(ESPPanel, bpy.types.Panel):
         layout = self.layout
         src, _is_record = connector_source(context)
         layout.active = src.add_pin
-        layout.prop(src, "clearance_mm")
+        layout.label(text="How the printed parts go together")
+        layout.row(align=True).prop(src, "fit_preset", expand=True)
+        row = layout.row()
+        row.enabled = src.fit_preset == 'CUSTOM'
+        row.prop(src, "clearance_mm")
+        widened = src.clearance_mm * 2.0
+        layout.label(text=f"Socket comes out {widened:.2f} mm wider than the pin", icon='DRIVER_DISTANCE')
+        if src.fit_preset != 'CUSTOM':
+            layout.label(
+                text=f"From Printer Clearance {plan.printer_clearance_mm(context):.2f} mm (Preferences)",
+                icon='TOOL_SETTINGS',
+            )
+        layout.separator()
         layout.prop(src, "asymmetric")
         row = layout.row()
         row.active = src.asymmetric
         row.prop(src, "tip_extra_mm")
-        layout.label(text="Clearance is printer specific: test print first", icon='INFO')
 
 
 class ESP_PT_options(ESPPanel, bpy.types.Panel):

@@ -36,6 +36,23 @@ SIZE_PRESETS = [
 ]
 HEIGHT_RATIO = 1.2  # protrusion height = diameter * ratio
 
+# How tight the printed joint should be, as a multiple of the printer's own clearance.
+# The value is the gap on EACH side, so the socket ends up twice that wider than the pin.
+FIT_PRESETS = [
+    ('PRESS', "Press", "Tight: tap it home, holds on its own", 0.5),
+    ('SNUG', "Snug", "Firm by hand - the usual choice", 1.0),
+    ('EASY', "Easy", "Slides together without force", 1.5),
+    ('LOOSE', "Loose", "Free fit, leaves room for glue", 2.5),
+    ('CUSTOM', "Custom", "Type the gap yourself", 0.0),
+]
+
+
+def fit_factor(preset):
+    for ident, _n, _d, f in FIT_PRESETS:
+        if ident == preset:
+            return f
+    return 1.0
+
 
 def preset_factor(preset):
     for ident, _n, _d, f in SIZE_PRESETS:

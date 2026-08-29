@@ -4,7 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.2] - 2026-08-28
+
+### Added
+- **Printer profile**: *Printer Clearance* in the add-on preferences - how much room your printer
+  needs between a pin and its socket, on each side, for the printed parts to go together. It
+  belongs to the printer and the filament rather than to the model, so it is set once and every
+  cut in every file uses it. Defaults to 0.1 mm, which suits most FDM printers.
+- **Fit** preset on every cut: *Press* (0.5x), *Snug* (1x, the default), *Easy* (1.5x), *Loose*
+  (2.5x) or *Custom*. It scales the printer clearance, so you pick how tight the joint should feel
+  instead of guessing a number. The panel now spells out the consequence - how much wider the
+  socket comes out than the pin.
+
+### Changed
+- The connector gap now defaults to 0.10 mm per side (0.20 mm on the diameter) instead of 0.30 mm
+  per side (0.60 mm on the diameter). The old default left a printed pin visibly loose: the value
+  has always been applied to each side, so it opens the socket by twice itself, and 0.60 mm on the
+  diameter is well past the 0.10-0.30 mm range these joints are normally printed with.
+- *Clearance* is now called *Gap per Side*, because that is what it is.
+- Opening a file made with 0.2.x: the cuts in it keep their stored gap until a connector setting is
+  touched, at which point the Fit preset (Snug) takes over and writes the printer value. Set Fit to
+  *Custom* on a cut you had tuned by hand to keep its own number.
 
 ## [0.2.1] - 2026-08-27
 
@@ -79,7 +99,8 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rafaelomodei/easySlicePrint/releases/tag/v0.1.0

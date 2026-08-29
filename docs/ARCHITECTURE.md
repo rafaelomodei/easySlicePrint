@@ -49,7 +49,9 @@ easy_slice_print/
    model and the exit point along the view ray give a first centre; 16 in-plane rays refine it to the
    middle of the cross-section and the shortest ray gives the inscribed diameter (used by the size
    presets). Pin = unit mesh × `Matrix(loc, rot, scale(w, w, h))` with `+z` pointing into the socket
-   part. `pin part ∪ pin`, `socket part − pin(+clearance radially, +tip extra axially)`.
+   part. The radial clearance is resolved from the printer profile by the cut's Fit preset
+   (`plan.apply_fit`), and is a gap per side: the socket opens up by twice it.
+   `pin part ∪ pin`, `socket part − pin(+clearance radially, +tip extra axially)`.
 5. **Remesh** (optional) and object creation in `ESP_Built_<name>`.
 
 The same estimate is used for previews and builds, so what you see in Plan mode is what gets built.

@@ -25,6 +25,7 @@ below is an original implementation; nothing was copied.
 | Edit curve/freehand points | point editor modal: drag, Ctrl+LMB add, X delete, G slide whole cut, R reset, Ctrl+Z undo | `ESP_OT_edit_surface` |
 | Connector on/off, shape, size, width/height | Connector panel (per next cut or per selected cut; new cuts copy the selected cut's settings) | `ESP_PT_connector` |
 | Built-in + custom connector shapes | Cylinder, Tapered, Hexagon, Box + `ESP_Connectors` library (unit-box convention) | `core/connectors.py` |
+| Printed parts that actually fit together | *Printer Clearance* set once per printer in the preferences; each cut picks Press / Snug / Easy / Loose / Custom, and the panel shows how much wider the socket comes out | `ESP_Preferences.printer_clearance_mm`, `plan.apply_fit` |
 | Clearance, asymmetric tip, tip extra | **Fit & Clearance** sub-panel | `ESP_PT_fit` |
 | Pin on side A or B, swap | *Pin Side* + **Swap** | `ESP_OT_swap_pin_side` |
 | Move/rotate/scale the pin manually, reset | **Select Connector** (G/R/S) / **Manual Connector Adjust** panel / **Reset** | `ESP_OT_select_pin`, `ESP_PT_pin_adjust`, `ESP_OT_reset_pin` |

@@ -80,6 +80,13 @@ def _record_update(self, context):
     plan.on_record_settings_changed(context, self)
 
 
+def _settings_update(self, context):
+    """The scene defaults carry no previews; only the Fit preset has to resolve itself."""
+    from . import plan
+
+    plan.apply_fit(context, self)
+
+
 def _record_show_update(self, context):
     from . import plan
 
@@ -141,14 +148,30 @@ def connector_props(update=None):
             precision=3,
             step=1,
         ),
+        'fit_preset': EnumProperty(
+            name="Fit",
+            items=[(i, n, d) for i, n, d, _f in connectors.FIT_PRESETS],
+            default='SNUG',
+            description=(
+                "How tight this joint should end up once printed. It scales the Printer Clearance "
+                "from the add-on preferences, so set the printer once and choose the feel per cut"
+            ),
+            update=update,
+        ),
         'clearance_mm': FloatProperty(
-            name="Clearance",
-            description="Radial gap between the pin and the socket (mm). Printer specific - test print!",
-            default=0.30,
+            name="Gap per Side",
+            description=(
+                "Gap left between the pin and the wall of its socket, on each side (mm) - so the "
+                "socket comes out twice this much wider than the pin. It is what makes a printed "
+                "connector go home firmly instead of rattling or refusing to enter. Set by the Fit "
+                "preset unless that is Custom"
+            ),
+            default=0.10,
             min=0.0,
-            soft_max=3.0,
+            soft_max=1.0,
             precision=3,
             step=1,
+            update=update,
         ),
         'asymmetric': BoolProperty(
             name="Asymmetric Tip",
@@ -300,7 +323,7 @@ class ESP_Settings(bpy.types.PropertyGroup):
     last_message: StringProperty()
 
 
-ESP_Settings.__annotations__.update(connector_props(update=None))
+ESP_Settings.__annotations__.update(connector_props(update=_settings_update))
 
 
 CLASSES = (ESP_CutRecord, ESP_Settings)

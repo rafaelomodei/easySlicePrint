@@ -87,7 +87,7 @@ Testado headless no Blender 4.2.23 LTS e 5.2.1 LTS (o CI roda os dois). Funciona
      aparece pontilhado. `Ctrl+Z` (ou `Backspace`) desfaz o último traço. Feche o laço no ponto
      verde inicial — ele só fecha sozinho quando esse ponto está realmente visível — ou com
      `Enter` / `C` de qualquer ângulo.
-5. Painel Connector: forma, tamanho, lado do pino, cut gap, folga.
+5. Painel Connector: forma, tamanho, lado do pino, cut gap e o **Fit** do encaixe impresso.
 6. **Plan mode**: selecione um corte na lista para editar — *Edit Cut Surface* (G/R/S nos planos, arraste
    pontos nas curvas; cada superfície de corte tem origem própria no seu centro, então `R` e `S` giram e
    escalam em torno dela — mude *Surface Origin* para *Target Object* se preferir o pivô do modelo), *Select Connector* e G/R/S, *Reset*, *Swap* do lado do pino. Desmarque **Ready** para
@@ -95,7 +95,13 @@ Testado headless no Blender 4.2.23 LTS e 5.2.1 LTS (o CI roda os dois). Funciona
 7. **Build** → as peças aparecem em `ESP_Built_<nome>`. **Back to Plan** para mudar algo, **Approve** para finalizar.
 8. **Exploded View** para conferir o encaixe, **Export** para gravar os arquivos.
 
-A folga do conector depende da impressora (0,15–0,4 mm é comum). Imprima um teste pequeno antes.
+**Encaixe impresso.** Defina *Printer Clearance* uma vez nas preferências do add-on (Edit ›
+Preferences › Add-ons › EasySlice Print) — quanto de folga a sua impressora precisa entre o pino e
+o encaixe, de cada lado. 0,1 mm serve para a maioria das impressoras FDM; imprima um encaixe de
+teste e não mexa mais. Cada corte escolhe então o quanto quer apertado no **Fit**: *Press* (0,5×),
+*Snug* (1×, o padrão), *Easy* (1,5×), *Loose* (2,5×) ou *Custom* para digitar a folga. O painel
+mostra o quanto o encaixe fica mais largo que o pino — o dobro da folga, já que ela é deixada de
+cada lado.
 
 ### Conectores personalizados
 

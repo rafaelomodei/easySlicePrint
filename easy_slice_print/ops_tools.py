@@ -8,7 +8,7 @@ import bpy
 from bpy_extras import view3d_utils
 from mathutils import Vector
 
-from . import draw, plan
+from . import draw, jobs, plan
 from .core import cutting, mesh_utils, surfaces
 
 NAV_EVENTS = {
@@ -106,7 +106,8 @@ def schedule_chain(idname, window, area):
     bpy.app.timers.register(cb, first_interval=0.1)
 
 
-def quick_cut(context, target, contacts):
+def quick_cut_steps(context, target, contacts):
+    """Generator form of `quick_cut` for the modal job driver (see `jobs.py`)."""
     settings = context.scene.esp
     scene = context.scene
     spec = plan.quick_spec(context, target, contacts)
@@ -114,7 +115,7 @@ def quick_cut(context, target, contacts):
     col = plan.built_collection(scene, base_name)
     state = plan.ensure_evaluable(target)
     try:
-        a, b, secs = cutting.perform_cut(context, target, spec, ("_esp_new_a", "_esp_new_b"), col)
+        a, b, secs = yield from cutting.perform_cut_steps(context, target, spec, ("_esp_new_a", "_esp_new_b"), col)
     finally:
         plan.restore_visibility(target, state)
     la, lb = cutting.side_labels(mesh_utils.mesh_centroid(a.data), mesh_utils.mesh_centroid(b.data))
@@ -136,7 +137,12 @@ def quick_cut(context, target, contacts):
     return a, b, secs
 
 
-class CutToolBase:
+def quick_cut(context, target, contacts):
+    """Blocking Quick mode cut. The UI goes through `quick_cut_steps` instead."""
+    return cutting.drain(quick_cut_steps(context, target, contacts))
+
+
+class CutToolBase(jobs.JobMixin):
     bl_options = {'REGISTER', 'UNDO'}
     kind = 'STRAIGHT'
     cursor = CURSOR_CUT
@@ -216,6 +222,11 @@ class CutToolBase:
         return self.view_at_press is not None and self.view_key() != self.view_at_press
 
     def modal(self, context, event):
+        if self.job_running():
+            state, payload = self.job_step(context, event)
+            if state == jobs.RUNNING:
+                return {'RUNNING_MODAL'}
+            return self.job_done(context, state, payload)
         self.mouse = self.coord(event)
         if event.type in NAV_EVENTS:
             return {'PASS_THROUGH'}
@@ -321,21 +332,42 @@ class CutToolBase:
     def finish(self, context):
         self.end(context)
         settings = context.scene.esp
-        try:
-            if settings.mode == 'PLAN':
+        if settings.mode == 'PLAN':
+            try:
                 rec = plan.add_record(context, self.target, self.kind, self.contacts)
-                settings.last_message = f"'{rec.name}' added to the plan"
-                self.report({'INFO'}, f"'{rec.name}' added to the plan. Select it in the list to edit its connector.")
-            else:
-                a, b, secs = quick_cut(context, self.target, self.contacts)
-                settings.last_message = f"Cut done in {secs:.2f}s"
-                self.report({'INFO'}, f"Cut completed in {secs:.2f}s: {a.name} / {b.name}. Ctrl+Z to undo.")
-        except cutting.CutError as e:
-            self.report({'ERROR'}, str(e))
-            return {'CANCELLED'}
-        if settings.chain_cuts:
+            except cutting.CutError as e:
+                self.report({'ERROR'}, str(e))
+                return {'CANCELLED'}
+            settings.last_message = f"'{rec.name}' added to the plan"
+            self.report({'INFO'}, f"'{rec.name}' added to the plan. Select it in the list to edit its connector.")
+            return self.chain_or_finish(context)
+        # Quick mode: the booleans take seconds, so run them a step per timer tick
+        # and stay modal. Blocking here is what makes the desktop call Blender dead.
+        return self.job_start(context, quick_cut_steps(context, self.target, self.contacts), "Cut")
+
+    def chain_or_finish(self, context):
+        if context.scene.esp.chain_cuts:
             schedule_chain(self.bl_idname, self.window, self.area)
         return {'FINISHED'}
+
+    def cancel(self, context):
+        """Blender aborted the modal (file load, quit): drop the timer and the overlay."""
+        self.job_stop(context)
+        self.end(context)
+
+    def job_done(self, context, state, payload):
+        settings = context.scene.esp
+        if state == jobs.CANCELLED:
+            settings.last_message = "Cut cancelled"
+            self.report({'WARNING'}, "Cut cancelled")
+            return {'CANCELLED'}
+        if state == jobs.ERROR:
+            self.report({'ERROR'}, str(payload))
+            return {'CANCELLED'}
+        a, b, secs = payload
+        settings.last_message = f"Cut done in {secs:.2f}s"
+        self.report({'INFO'}, f"Cut completed in {secs:.2f}s: {a.name} / {b.name}. Ctrl+Z to undo.")
+        return self.chain_or_finish(context)
 
     # -- overridable ------------------------------------------------------------
     def on_press(self, context, c):

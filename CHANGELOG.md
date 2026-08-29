@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.3] - 2026-08-29
+
+### Fixed
+- **Blender no longer looks frozen while cutting**: cuts and plan builds used to run in one blocking
+  call, so the desktop got no answer to its "is this window alive?" ping and offered *Wait / Force
+  Quit* - on GNOME that happens after only 5 seconds, and a single cut on a dense model already takes
+  about that long. The cut pipeline now runs one step at a time, handing control back to Blender
+  between the booleans, so the window stays responsive. The status bar shows what the cut is doing
+  (`EasySlice Cut: carving the socket... (3.2s)`) and **Esc** cancels a build in progress without
+  leaving stray meshes behind.
+
 ## [0.2.2] - 2026-08-28
 
 ### Added
@@ -99,7 +110,8 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.1.0...v0.2.0

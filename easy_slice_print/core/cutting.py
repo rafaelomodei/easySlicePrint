@@ -44,6 +44,15 @@ class CutSpec:
 # ----------------------------------------------------------------------------
 # helpers
 # ----------------------------------------------------------------------------
+def drain(generator):
+    """Run a step generator to the end and return its value (synchronous callers)."""
+    while True:
+        try:
+            next(generator)
+        except StopIteration as stop:
+            return stop.value
+
+
 def side_sign(point, bvh):
     loc, nor, _idx, _dist = bvh.find_nearest(point)
     if loc is None:
@@ -119,51 +128,87 @@ def estimate_pin_frame(obj, depsgraph, patch_bvh, diag, surface_point=None, thro
 # ----------------------------------------------------------------------------
 # pipeline
 # ----------------------------------------------------------------------------
+def split_mesh_steps(context, mesh, spec):
+    """Generator form of `split_mesh`.
+
+    Yields a short label BEFORE each heavy step and returns (mesh_a, mesh_b).
+    Every yield hands control back to Blender's event loop, which is what keeps
+    the window answering the compositor's "are you alive?" pings during a cut.
+    """
+    work = mesh
+    orphans = []  # intermediates to drop if the job is cancelled part way through
+    total = len(spec.contacts)
+    try:
+        for i, c in enumerate(spec.contacts):
+            yield f"cutting surface {i + 1}/{total}" if total > 1 else "cutting surface"
+            slab_bm = surfaces.slab_from_patch(c.verts, c.faces, spec.gap)
+            slab = mesh_utils.bmesh_to_mesh(slab_bm, "_esp_slab")
+            slab_bm.free()
+            res = mesh_utils.boolean_mesh(context, work, slab, 'DIFFERENCE', spec.solver)
+            mesh_utils.remove_mesh(slab)
+            mesh_utils.remove_mesh(work)
+            work = res
+        if len(work.polygons) == 0:
+            raise CutError("Boolean failed (empty result). Check that the mesh is closed and manifold.")
+        yield "separating the parts"
+        orphans = mesh_utils.separate_loose_meshes(context, work)
+        work = None
+        c0 = spec.contacts[0]
+        bvh = mesh_utils.bvh_from_pydata(c0.verts, c0.faces)
+        side_a, side_b = [], []
+        for p in orphans:
+            (side_a if side_sign(mesh_utils.mesh_centroid(p), bvh) > 0 else side_b).append(p)
+        if not side_a or not side_b:
+            raise CutError("The cut surface does not split this part in two. Make the cut cross the whole part.")
+        out = mesh_utils.join_meshes(side_a, "_esp_part_a"), mesh_utils.join_meshes(side_b, "_esp_part_b")
+        orphans = []
+        return out
+    finally:
+        mesh_utils.remove_mesh(work)
+        for me in orphans:
+            mesh_utils.remove_mesh(me)
+
+
 def split_mesh(context, mesh, spec):
     """Consume `mesh`, return (mesh_a, mesh_b). Side A is the + side of contact 0."""
-    work = mesh
-    for c in spec.contacts:
-        slab_bm = surfaces.slab_from_patch(c.verts, c.faces, spec.gap)
-        slab = mesh_utils.bmesh_to_mesh(slab_bm, "_esp_slab")
-        slab_bm.free()
-        res = mesh_utils.boolean_mesh(context, work, slab, 'DIFFERENCE', spec.solver)
-        mesh_utils.remove_mesh(slab)
-        mesh_utils.remove_mesh(work)
-        work = res
-    if len(work.polygons) == 0:
-        mesh_utils.remove_mesh(work)
-        raise CutError("Boolean failed (empty result). Check that the mesh is closed and manifold.")
-    parts = mesh_utils.separate_loose_meshes(context, work)
-    c0 = spec.contacts[0]
-    bvh = mesh_utils.bvh_from_pydata(c0.verts, c0.faces)
-    side_a, side_b = [], []
-    for p in parts:
-        (side_a if side_sign(mesh_utils.mesh_centroid(p), bvh) > 0 else side_b).append(p)
-    if not side_a or not side_b:
-        for p in parts:
-            mesh_utils.remove_mesh(p)
-        raise CutError("The cut surface does not split this part in two. Make the cut cross the whole part.")
-    return mesh_utils.join_meshes(side_a, "_esp_part_a"), mesh_utils.join_meshes(side_b, "_esp_part_b")
+    return drain(split_mesh_steps(context, mesh, spec))
+
+
+def apply_connectors_steps(context, mesh_a, mesh_b, spec):
+    total = sum(1 for c in spec.contacts if c.add_pin and c.pin_matrix is not None)
+    n = 0
+    half = None  # first half finished; dropped if the job is cancelled between the two booleans
+    try:
+        for c in spec.contacts:
+            if not c.add_pin or c.pin_matrix is None:
+                continue
+            n += 1
+            yield f"adding connector {n}/{total}" if total > 1 else "adding the connector"
+            pin = connectors.connector_mesh(c.shape, c.custom_obj, c.pin_matrix, "_esp_pin")
+            socket = connectors.connector_mesh(
+                c.shape,
+                c.custom_obj,
+                c.pin_matrix,
+                "_esp_socket",
+                radial_extra=spec.clearance,
+                tip_extra=spec.tip_extra,
+            )
+            pin_target, socket_target = (mesh_a, mesh_b) if spec.pin_side == 'A' else (mesh_b, mesh_a)
+            half = mesh_utils.boolean_mesh(context, pin_target, pin, 'UNION', spec.solver)
+            yield f"carving socket {n}/{total}" if total > 1 else "carving the socket"
+            carved = mesh_utils.boolean_mesh(context, socket_target, socket, 'DIFFERENCE', spec.solver)
+            new_a, new_b = (half, carved) if spec.pin_side == 'A' else (carved, half)
+            half = None
+            for m in (pin, socket, mesh_a, mesh_b):
+                mesh_utils.remove_mesh(m)
+            mesh_a, mesh_b = new_a, new_b
+        return mesh_a, mesh_b
+    finally:
+        mesh_utils.remove_mesh(half)
 
 
 def apply_connectors(context, mesh_a, mesh_b, spec):
-    for c in spec.contacts:
-        if not c.add_pin or c.pin_matrix is None:
-            continue
-        pin = connectors.connector_mesh(c.shape, c.custom_obj, c.pin_matrix, "_esp_pin")
-        socket = connectors.connector_mesh(
-            c.shape, c.custom_obj, c.pin_matrix, "_esp_socket", radial_extra=spec.clearance, tip_extra=spec.tip_extra
-        )
-        if spec.pin_side == 'A':
-            new_a = mesh_utils.boolean_mesh(context, mesh_a, pin, 'UNION', spec.solver)
-            new_b = mesh_utils.boolean_mesh(context, mesh_b, socket, 'DIFFERENCE', spec.solver)
-        else:
-            new_b = mesh_utils.boolean_mesh(context, mesh_b, pin, 'UNION', spec.solver)
-            new_a = mesh_utils.boolean_mesh(context, mesh_a, socket, 'DIFFERENCE', spec.solver)
-        for m in (pin, socket, mesh_a, mesh_b):
-            mesh_utils.remove_mesh(m)
-        mesh_a, mesh_b = new_a, new_b
-    return mesh_a, mesh_b
+    return drain(apply_connectors_steps(context, mesh_a, mesh_b, spec))
 
 
 def remesh_mesh(context, mesh, voxel, adaptivity, smooth):
@@ -180,21 +225,34 @@ def remesh_mesh(context, mesh, voxel, adaptivity, smooth):
     return out
 
 
-def perform_cut(context, target_obj, spec, names, out_collection):
-    """Cut `target_obj` and create the two result objects.
+def perform_cut_steps(context, target_obj, spec, names, out_collection):
+    """Generator form of `perform_cut`: yields a label before every heavy step.
 
-    names: (name_a, name_b). Returns (obj_a, obj_b, seconds).
+    A single boolean can take seconds; run through a modal driver (see `jobs.py`)
+    so Blender gets back to its event loop between steps instead of looking hung.
     """
     t0 = time.time()
+    yield "preparing the mesh"
     mesh = mesh_utils.world_mesh_copy(context, target_obj, "_esp_work")
+    made = []
     try:
-        mesh_a, mesh_b = split_mesh(context, mesh, spec)
-        mesh_a, mesh_b = apply_connectors(context, mesh_a, mesh_b, spec)
+        mesh_a, mesh_b = yield from split_mesh_steps(context, mesh, spec)
+        made = [mesh_a, mesh_b]
+        mesh_a, mesh_b = yield from apply_connectors_steps(context, mesh_a, mesh_b, spec)
+        made = [mesh_a, mesh_b]
         if spec.remesh and spec.remesh_voxel > 0.0:
+            yield "remeshing part 1/2"
             mesh_a = remesh_mesh(context, mesh_a, spec.remesh_voxel, spec.remesh_adaptivity, spec.remesh_smooth)
+            made = [mesh_a, mesh_b]
+            yield "remeshing part 2/2"
             mesh_b = remesh_mesh(context, mesh_b, spec.remesh_voxel, spec.remesh_adaptivity, spec.remesh_smooth)
+            made = [mesh_a, mesh_b]
+        made = []
     finally:
         mesh_utils.cleanup_temp(context.scene)
+        # cancelled or failed part way through: drop the half finished meshes
+        for me in made:
+            mesh_utils.remove_mesh(me)
     mats = [m for m in target_obj.data.materials] if target_obj.type == 'MESH' else []
     result = []
     for me, name, side in ((mesh_a, names[0], 'A'), (mesh_b, names[1], 'B')):
@@ -208,3 +266,11 @@ def perform_cut(context, target_obj, spec, names, out_collection):
         out_collection.objects.link(obj)
         result.append(obj)
     return result[0], result[1], time.time() - t0
+
+
+def perform_cut(context, target_obj, spec, names, out_collection):
+    """Cut `target_obj` and create the two result objects.
+
+    names: (name_a, name_b). Returns (obj_a, obj_b, seconds).
+    """
+    return drain(perform_cut_steps(context, target_obj, spec, names, out_collection))

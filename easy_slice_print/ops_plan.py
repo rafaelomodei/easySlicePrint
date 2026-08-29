@@ -9,7 +9,7 @@ from bpy.props import IntProperty
 from bpy_extras import view3d_utils
 from mathutils import Vector
 
-from . import draw, plan
+from . import draw, jobs, plan
 from .core import cutting, mesh_utils
 from .ops_tools import CURSOR_DRAW, NAV_EVENTS, dist2d, restore_cursor, set_cursor, window_region
 
@@ -373,6 +373,19 @@ def _remove_built_parts(context):
         rec.built = False
 
 
+def _labelled(generator, prefix):
+    """Forward a step generator, tagging each label with the cut it belongs to."""
+    try:
+        while True:
+            try:
+                label = next(generator)
+            except StopIteration as stop:
+                return stop.value
+            yield f"{prefix} - {label}" if label else prefix
+    finally:
+        generator.close()
+
+
 def _pick_target(parts, anchor):
     best, best_d = None, 1e30
     for p in parts:
@@ -382,7 +395,7 @@ def _pick_target(parts, anchor):
     return best or parts[0]
 
 
-class ESP_OT_build(bpy.types.Operator):
+class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
     bl_idname = "esp.build"
     bl_label = "Build Plan"
     bl_description = "Apply every ready cut to the model and create the final parts (the plan stays editable)"
@@ -393,14 +406,19 @@ class ESP_OT_build(bpy.types.Operator):
         s = context.scene.esp
         return context.mode == 'OBJECT' and any(r.enabled for r in s.cuts)
 
-    def execute(self, context):
+    def build_steps(self, context):
+        """Run the whole plan, yielding a label before each heavy step.
+
+        Every cut is several seconds of boolean work; a three cut plan easily
+        passes ten. Yielding lets the modal driver return to Blender's event
+        loop so the window never looks frozen to the desktop.
+        """
         s = context.scene.esp
         scene = context.scene
+        t0 = time.time()
         base = bpy.data.objects.get(s.base_object)
         if base is None:
-            self.report({'ERROR'}, "The plan's source object no longer exists. Clear the plan.")
-            return {'CANCELLED'}
-        t0 = time.time()
+            raise cutting.CutError("The plan's source object no longer exists. Clear the plan.")
         if s.built:
             _remove_built_parts(context)
         plan.restore_from_backup(scene, base)
@@ -411,9 +429,10 @@ class ESP_OT_build(bpy.types.Operator):
         counter = 0
         done = 0
         skipped = 0
-        for rec in s.cuts:
-            if not rec.enabled:
-                continue
+        enabled = [r for r in s.cuts if r.enabled]
+        for i, rec in enumerate(enabled, start=1):
+            prefix = f"cut {i}/{len(enabled)}"
+            yield f"{prefix} - preparing"
             plan.refresh_record_frames(context, rec)
             try:
                 spec = plan.record_spec(context, rec, s)
@@ -422,7 +441,9 @@ class ESP_OT_build(bpy.types.Operator):
                 names = (f"{base.name}_PART_{counter - 1:03d}", f"{base.name}_PART_{counter:03d}")
                 state = plan.ensure_evaluable(target)
                 try:
-                    a, b, _secs = cutting.perform_cut(context, target, spec, names, col)
+                    a, b, _secs = yield from _labelled(
+                        cutting.perform_cut_steps(context, target, spec, names, col), prefix
+                    )
                 finally:
                     plan.restore_visibility(target, state)
             except cutting.CutError as e:
@@ -433,8 +454,7 @@ class ESP_OT_build(bpy.types.Operator):
                 for o in made:
                     mesh_utils.remove_object(o)
                 bpy.data.collections.remove(col)
-                self.report({'ERROR'}, f"'{rec.name}' failed: {e}")
-                return {'CANCELLED'}
+                raise cutting.CutError(f"'{rec.name}' failed: {e}") from e
             parts.remove(target)
             if target is not base:
                 made.remove(target)
@@ -445,8 +465,8 @@ class ESP_OT_build(bpy.types.Operator):
             done += 1
         if not made:
             bpy.data.collections.remove(col)
-            self.report({'ERROR'}, "Nothing was cut")
-            return {'CANCELLED'}
+            raise cutting.CutError("Nothing was cut")
+        yield "finishing"
         for i, o in enumerate(sorted(made, key=lambda o: o.name), start=1):
             o.name = f"{base.name}_PART_{i:03d}"
             o.data.name = o.name
@@ -465,7 +485,45 @@ class ESP_OT_build(bpy.types.Operator):
         msg = f"Built {len(made)} part(s) from {done} cut(s) in {secs:.2f}s"
         if skipped:
             msg += f" ({skipped} skipped)"
-        s.last_message = msg
+        return msg
+
+    # -- modal driver -------------------------------------------------------
+    def invoke(self, context, event):
+        if context.window is None:
+            return self.execute(context)
+        return self.job_start(context, self.build_steps(context), "Build", add_handler=True)
+
+    def modal(self, context, event):
+        state, payload = self.job_step(context, event)
+        if state == jobs.RUNNING:
+            return {'RUNNING_MODAL'}
+        return self.job_done(context, state, payload)
+
+    def cancel(self, context):
+        """Blender aborted the modal: stop the timer and clear the status line."""
+        self.job_stop(context)
+
+    def job_done(self, context, state, payload):
+        s = context.scene.esp
+        if state == jobs.CANCELLED:
+            s.last_message = "Build cancelled"
+            self.report({'WARNING'}, "Build cancelled - the parts made so far were kept")
+            return {'CANCELLED'}
+        if state == jobs.ERROR:
+            self.report({'ERROR'}, str(payload))
+            return {'CANCELLED'}
+        s.last_message = payload
+        self.report({'INFO'}, payload + ". Plan preserved; use Back to Plan to edit.")
+        return {'FINISHED'}
+
+    def execute(self, context):
+        """Blocking build, for scripts and background runs."""
+        try:
+            msg = cutting.drain(self.build_steps(context))
+        except cutting.CutError as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+        context.scene.esp.last_message = msg
         self.report({'INFO'}, msg + ". Plan preserved; use Back to Plan to edit.")
         return {'FINISHED'}
 

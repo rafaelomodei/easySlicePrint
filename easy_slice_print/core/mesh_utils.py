@@ -30,8 +30,11 @@ def new_temp_object(scene, mesh, name):
 
 
 def remove_object(obj, remove_data=True):
-    data = obj.data
-    bpy.data.objects.remove(obj, do_unlink=True)
+    try:
+        data = obj.data
+        bpy.data.objects.remove(obj, do_unlink=True)
+    except ReferenceError:
+        return
     if remove_data and data is not None and data.users == 0 and isinstance(data, bpy.types.Mesh):
         bpy.data.meshes.remove(data)
 
@@ -46,8 +49,14 @@ def cleanup_temp(scene):
 
 
 def remove_mesh(mesh):
-    if mesh is not None and mesh.users == 0:
-        bpy.data.meshes.remove(mesh)
+    if mesh is None:
+        return
+    try:
+        if mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+    except ReferenceError:
+        # already gone (a cancelled cut cleans up meshes the pipeline consumed)
+        pass
 
 
 # ----------------------------------------------------------------------------

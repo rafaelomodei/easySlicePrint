@@ -353,6 +353,51 @@ def test_custom_connector_and_remesh():
     check(len(a.data.polygons) > 1000, "remesh produced dense geometry")
 
 
+def test_stepped_cut():
+    """The cut runs as a generator so Blender's event loop is never blocked for long."""
+    print("== stepped cut (no long main thread block)")
+    reset_scene()
+    obj = make_cylinder()
+    diag = mesh_utils.object_world_diagonal(obj)
+    verts, faces = surfaces.plane_patch(Vector((0, 0, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), diag * 1.3)
+    pm = connectors.connector_matrix(Vector((0, 0, 0)), Vector((0, 0, -1)), 6.0, 8.0)
+    spec = cutting.CutSpec(
+        contacts=[cutting.ContactSpec(verts, faces, True, pm, 'CYLINDER', None)], gap=0.2, clearance=0.1
+    )
+    out = out_collection("stepped")
+    gen = cutting.perform_cut_steps(bpy.context, obj, spec, ("A", "B"), out)
+    labels = []
+    longest = 0.0
+    while True:
+        t = time.time()
+        try:
+            label = next(gen)
+        except StopIteration as stop:
+            longest = max(longest, time.time() - t)
+            a, b, secs = stop.value
+            break
+        longest = max(longest, time.time() - t)
+        labels.append(label)
+    check(len(labels) >= 4, f"the cut is split into steps ({len(labels)} labels: {', '.join(labels)})")
+    check(all(isinstance(x, str) and x for x in labels), "every step reports a label for the status bar")
+    check(longest <= secs, f"no single step costs more than the whole cut ({longest:.3f}s of {secs:.3f}s)")
+    check(is_closed_manifold(a.data) and is_closed_manifold(b.data), "stepped cut gives closed manifold parts")
+
+    # a cancelled job must not leave orphan meshes behind
+    reset_scene()
+    obj = make_cylinder()
+    out = out_collection("cancelled")
+    before = set(m.name for m in bpy.data.meshes)
+    gen = cutting.perform_cut_steps(bpy.context, obj, spec, ("A", "B"), out)
+    next(gen)
+    next(gen)
+    next(gen)
+    gen.close()
+    leaked = sorted(set(m.name for m in bpy.data.meshes) - before)
+    check(not leaked, f"cancelling part way leaks nothing (leaked: {leaked})")
+    check(bpy.data.collections.get(mesh_utils.TEMP_COLLECTION) is None, "cancelling removes the temp collection")
+
+
 if __name__ == "__main__":
     t = time.time()
     test_straight_cut_with_pin()
@@ -361,6 +406,7 @@ if __name__ == "__main__":
     test_smooth_surfaces()
     test_two_contacts()
     test_custom_connector_and_remesh()
+    test_stepped_cut()
     print(f"\n{len(FAILS)} failure(s) in {time.time() - t:.1f}s")
     for f in FAILS:
         print("  -", f)

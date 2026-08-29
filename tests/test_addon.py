@@ -121,8 +121,6 @@ def curve_contact(obj, diag):
 def test_printer_fit():
     """The Fit preset must decide how much wider the socket comes out than the pin."""
     print("== printer fit / clearance")
-    from mathutils import Matrix
-
     from easy_slice_print.core import connectors
 
     sc = reset_scene()

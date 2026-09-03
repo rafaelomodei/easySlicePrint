@@ -9,6 +9,10 @@ tests/_out/
 .DS_Store
 .ruff_cache/
 
+# raw screen recordings: only the derived assets in docs/media/ and
+# website/public/media/ are committed (see docs/media/README.md)
+/media/
+
 # Claude Code
 .claude/
 CLAUDE.md

@@ -377,7 +377,7 @@ const en = {
     badgeVideo: "Demo video coming soon",
     badgeImage: "Screenshot coming soon",
     hero: {
-      alt: "{name} demo: drawing a freehand cut, building the parts and exploding them",
+      alt: "{name} demo: a curve cut drawn over a carousel horse's tail, which comes off as its own printable part",
       expects: "20–40 s screen recording: draw a Freehand cut → Build → Exploded View → Export",
     },
     stepCut: {
@@ -397,7 +397,7 @@ const en = {
       expects: "Plan Mode: drag a Plane cut, then Edit Cut Surface and move the plane with G/R",
     },
     curveCut: {
-      alt: "Curve cut: drawing a curved line over the model",
+      alt: "Curve cut: a curved line drawn over a carousel horse's tail, which comes off as its own part",
       expects: "Plan Mode: draw a Curve cut across the silhouette, drag a few control points",
     },
     freehandCut: {

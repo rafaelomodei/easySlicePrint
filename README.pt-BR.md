@@ -28,10 +28,20 @@
 > [abra uma issue](https://github.com/rafaelomodei/easySlicePrint/issues) quando algo der
 > errado — é isso que leva o projeto até uma 1.0 estável.
 
-<!-- TODO(media): grave a demo, coloque os arquivos em docs/media/ e descomente.
-     A lista de capturas está em docs/media/README.md.
-<p align="center"><img src="docs/media/demo.gif" alt="Demonstração do EasySlice Print" width="720"></p>
--->
+<p align="center">
+  <a href="https://rafaelomodei.github.io/easySlicePrint/">
+    <img src="docs/media/curve-cut.gif" width="720" alt="Curve Cut: uma linha curva desenhada na cauda de um cavalo de carrossel, que sai como peça pronta para imprimir">
+  </a>
+</p>
+
+<p align="center">
+  <em><strong>Curve Cut</strong> no modo Quick Cut — desenhe uma linha sobre o modelo e a peça sai
+  com pino e encaixe já ajustados (velocidade 2,5&times;).<br>
+  <a href="https://rafaelomodei.github.io/easySlicePrint/">Mais clipes no site &rarr;</a></em>
+</p>
+
+<!-- TODO(media): o fluxo completo (Freehand cut -> Build -> Exploded View -> Export) ainda falta
+     gravar; a lista de capturas está em docs/media/README.md. -->
 
 |  |  |
 |---|---|

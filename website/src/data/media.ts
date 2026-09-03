@@ -5,9 +5,9 @@
  * hint are translated copy and live in `src/i18n/{en,pt,es}.ts` under `media.*`
  * (merged in by `localizedMedia()` in `src/i18n/index.ts`).
  *
- * While the real recordings are not done yet, each slot points to a
- * placeholder illustration in `public/media/` and is flagged `placeholder: true`,
- * which renders a "demo coming soon" overlay. To publish the real thing:
+ * A slot with no real footage yet points to a placeholder illustration in
+ * `public/media/` and is flagged `placeholder: true`, which renders a "demo
+ * coming soon" overlay. To publish the real thing:
  *
  *   - image:   set `kind: "image"` and `src` to a file in `public/media/`
  *   - video:   set `kind: "video"`, `src` to an .mp4/.webm in `public/media/`
@@ -39,12 +39,14 @@ export interface MediaSlot extends MediaSource {
 }
 
 export const media = {
-  hero: { kind: "video", src: "media/placeholder-hero.svg", aspect: "16 / 9", placeholder: true },
+  // The curve cut is the only footage recorded so far, so it doubles as the hero;
+  // point this at the full draw → build → export demo once that one exists.
+  hero: { kind: "video", src: "media/curve-cut.mp4", poster: "media/curve-cut-poster.jpg", aspect: "16 / 9" },
   stepCut: { kind: "image", src: "media/placeholder-step-1.svg", placeholder: true },
   stepConnectors: { kind: "image", src: "media/placeholder-step-2.svg", placeholder: true },
   stepExport: { kind: "image", src: "media/placeholder-step-3.svg", placeholder: true },
   planeCut: { kind: "video", src: "media/placeholder-plane.svg", placeholder: true },
-  curveCut: { kind: "video", src: "media/placeholder-curve.svg", placeholder: true },
+  curveCut: { kind: "video", src: "media/curve-cut.mp4", poster: "media/curve-cut-poster.jpg" },
   freehandCut: { kind: "video", src: "media/placeholder-freehand.svg", placeholder: true },
   buildExport: { kind: "video", src: "media/placeholder-build.svg", placeholder: true },
   quickCut: { kind: "video", src: "media/placeholder-quick.svg", placeholder: true },

@@ -364,7 +364,7 @@ const pt: Dict = {
     badgeVideo: "Vídeo de demonstração em breve",
     badgeImage: "Captura de tela em breve",
     hero: {
-      alt: "Demonstração do {name}: desenhando um corte livre, construindo as peças e afastando-as",
+      alt: "Demonstração do {name}: um Curve cut desenhado na cauda de um cavalo de carrossel, que sai como peça pronta para imprimir",
       expects: "Gravação de tela de 20–40 s: desenhar um Freehand cut → Build → Exploded View → Export",
     },
     stepCut: {
@@ -384,7 +384,7 @@ const pt: Dict = {
       expects: "Plan Mode: arrastar um Plane cut, depois Edit Cut Surface e mover o plano com G/R",
     },
     curveCut: {
-      alt: "Curve cut: desenhando uma linha curva sobre o modelo",
+      alt: "Curve cut: uma linha curva desenhada na cauda de um cavalo de carrossel, que sai como peça separada",
       expects: "Plan Mode: desenhar um Curve cut atravessando a silhueta e arrastar alguns pontos de controle",
     },
     freehandCut: {

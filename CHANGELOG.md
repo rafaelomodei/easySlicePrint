@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **First real demo footage.** A Curve cut in Quick Cut mode — a line drawn over a carousel horse's
+  tail, which comes off as its own printable part, connector included — now opens both READMEs as a
+  GIF and plays in the website hero and Curve Cut section as a video. The raw captures stay out of
+  git (`/media/` is ignored); `docs/media/README.md` lists what is still to record and the ffmpeg
+  recipe that derives the committed files from a capture.
+
 ## [0.3.1-alpha] - 2026-09-03
 
 ### Added

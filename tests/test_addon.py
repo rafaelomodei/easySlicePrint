@@ -11,13 +11,13 @@ import tempfile
 
 import bmesh
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import easy_slice_print  # noqa: E402
 from easy_slice_print import plan, ui  # noqa: E402
-from easy_slice_print.core import mesh_utils, surfaces  # noqa: E402
+from easy_slice_print.core import cutting, mesh_utils, surfaces  # noqa: E402
 
 FAILS = []
 
@@ -109,13 +109,185 @@ def curve_contact(obj, diag):
     d = plan.ContactData('CURVED')
     d.points = pts
     d.view_dir = Vector((-1, 0, 0))
-    d.depth_range = (-2.0, 22.0)
-    d.extend = diag * 0.5
-    d.verts, d.faces = surfaces.ribbon_patch(pts, d.view_dir, 0.0, d.extend, depth_range=d.depth_range)
+    d.extend = diag * 0.1
+    built = plan.ribbon_surfaces(bpy.context, obj, pts, d.view_dir, d.extend, d.detail)
+    if built is not None:
+        preview, cutter, band = built
+        d.verts, d.faces = preview
+        d.cutter = cutter
+        d.depth_range = band
+        d.is_cut_face = True
+    else:
+        d.depth_range = (-2.0, 22.0)
+        d.verts, d.faces = surfaces.ribbon_patch(pts, d.view_dir, 0.0, d.extend, depth_range=d.depth_range)
     d.hit = pts[10].copy()
     d.through = d.view_dir
     d.anchor = d.hit.copy()
     return d
+
+
+def make_two_legs(name="Legs", at=(-30.0, 30.0), radius=10.0, height=60.0):
+    bm = bmesh.new()
+    for x in at:
+        leg = bmesh.new()
+        bmesh.ops.create_cone(
+            leg, cap_ends=True, cap_tris=True, segments=48, radius1=radius, radius2=radius, depth=height
+        )
+        bmesh.ops.translate(leg, verts=list(leg.verts), vec=Vector((x, 0, 0)))
+        bm.from_mesh(mesh_utils.bmesh_to_mesh(leg, f"_leg{x}"))
+        leg.free()
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    obj = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    bpy.context.view_layer.update()
+    return obj
+
+
+def world_bounds(obj):
+    pts = [obj.matrix_world @ v.co for v in obj.data.vertices]
+    mn = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+    mx = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+    return mn, mx
+
+
+def test_plane_section_preview():
+    """A plane cut's preview is the model's cross section, and it follows the plane."""
+    print("== plane cut surface tracks the model's cross section")
+    reset_scene()
+    legs = make_two_legs()
+
+    ref = Vector((-30.0, 0.0, 5.0))
+    span = (Vector((1, 0, 0)), -45.0, -15.0)
+    patch = plan.straight_section(bpy.context, legs, Vector((0, 0, 5)), Vector((0, 0, 1)), span, ref)
+    check(patch is not None, "the plane sections the model")
+    d = plan.ContactData('STRAIGHT')
+    d.verts, d.faces = patch
+    d.cutter = patch.cutter
+    d.span = span
+    d.is_cut_face = True
+    d.view_dir = Vector((-1, 0, 0))
+    d.plane_co = Vector((0, 0, 5))
+    d.plane_no = Vector((0, 0, 1))
+    d.hit = Vector((-20.0, 0.0, 5.0))
+    d.through = Vector((1, 0, 0))
+    d.anchor = ref.copy()
+    rec = plan.add_record(bpy.context, legs, 'STRAIGHT', [d])
+
+    sobj = bpy.data.objects.get(rec.surface_a)
+    check(sobj is not None, "the preview surface was created")
+    mn, mx = world_bounds(sobj)
+    check(abs((mx.x - mn.x) - 20.2) < 0.6, f"preview is one leg wide, not the whole model ({mx.x - mn.x:.1f} ~ 20)")
+    check(mx.x < -10.0, "preview sits on the leg the cut was drawn on")
+    check(abs(mn.z - 5.0) < 0.1 and abs(mx.z - 5.0) < 0.1, "preview sits on the cut plane")
+
+    cverts, _cfaces = plan.cutter_world_patch(sobj)
+    check(len(cverts) == 4, f"the boolean is handed a quad, not the section ({len(cverts)} verts)")
+    check(max(v.x for v in cverts) < 5.0, "and the quad stops in the gap before the other leg")
+
+    # G on the preview: the plane moves, so the section is taken again where it landed
+    sobj.matrix_world = Matrix.Translation(Vector((0.0, 0.0, 12.0))) @ sobj.matrix_world
+    bpy.context.view_layer.update()
+    plan.refresh_record_frames(bpy.context, rec)
+    mn, mx = world_bounds(sobj)
+    check(abs(mn.z - 17.0) < 0.1 and abs(mx.z - 17.0) < 0.1, f"moved preview re-sections at z=17 (got {mn.z:.1f})")
+    check(abs((mx.x - mn.x) - 20.2) < 0.6, f"moved preview is still one leg wide ({mx.x - mn.x:.1f} ~ 20)")
+    check(mx.x < -10.0, "moved preview stayed on the same leg")
+    cverts, _cfaces = plan.cutter_world_patch(sobj)
+    check(all(abs(v.z - 17.0) < 0.1 for v in cverts), "the quad followed the plane to z=17")
+    check(max(v.x for v in cverts) < 5.0, "and still spares the other leg")
+
+    centre = Vector(rec.center_a)
+    check(abs(centre.z - 17.0) < 0.5 and centre.x < -10.0, f"the pin followed the section (centre {centre})")
+
+
+def make_two_rods(name="Rods", at=(-40.0, 40.0), radius=10.0, height=80.0):
+    """Two cylinders one behind the other along +Y - the far one must survive a cut."""
+    bm = bmesh.new()
+    for y in at:
+        rod = bmesh.new()
+        bmesh.ops.create_cone(
+            rod, cap_ends=True, cap_tris=True, segments=48, radius1=radius, radius2=radius, depth=height
+        )
+        bmesh.ops.translate(rod, verts=list(rod.verts), vec=Vector((0.0, y, 0.0)))
+        bm.from_mesh(mesh_utils.bmesh_to_mesh(rod, f"_rod{y}"))
+        rod.free()
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    obj = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.objects.active = obj
+    bpy.context.view_layer.update()
+    return obj
+
+
+def test_curve_cut_stops_at_the_model():
+    """A curve drawn over the near rod must not reach through to the one behind it."""
+    print("== curve cut follows the model instead of one flat depth")
+    reset_scene()
+    rods = make_two_rods()
+    view = Vector((0, 1, 0))
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    pts = []
+    for i in range(20):
+        probe = Vector((-14.0 + 28.0 * i / 19, -80.0, 4.0 * math.sin(i / 19 * math.pi)))
+        hit, loc, _n, _d = mesh_utils.object_ray_cast(rods, probe, view, depsgraph, max_dist=400.0)
+        pts.append(loc if hit else probe)
+
+    built = plan.ribbon_surfaces(bpy.context, rods, pts, view, 6.0, 3)
+    check(built is not None, "the stroke finds material to follow")
+    preview, cutter, band = built
+    check(max(v.y for v in cutter[0]) < 25.0, "the surface the boolean gets stops in the gap, not on the far rod")
+    check(min(v.y for v in cutter[0]) < -50.0, "which still reaches out past the near rod")
+    py = [v.y for v in preview[0]]
+    check(max(py) < -25.0, f"the preview stops on the near rod's own back ({max(py):.1f} < -25)")
+
+    vol0 = mesh_utils.mesh_volume(rods.data)
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(cutter[0], cutter[1], add_pin=False)], gap=0.17)
+    a, b, _secs = cutting.perform_cut(bpy.context, rods, spec, ("A", "B"), bpy.context.scene.collection)
+    check(
+        mesh_utils.manifold_report(a.data)[:2] == (0, 0) and mesh_utils.manifold_report(b.data)[:2] == (0, 0),
+        "both halves are closed manifold",
+    )
+    kept = mesh_utils.mesh_volume(a.data) + mesh_utils.mesh_volume(b.data)
+    check(abs(kept - vol0) / vol0 < 0.02, f"volume preserved ({kept:.0f} of {vol0:.0f})")
+    spans = []
+    for part in (a, b):
+        far = [part.matrix_world @ v.co for v in part.data.vertices if (part.matrix_world @ v.co).y > 20.0]
+        spans.append((max(p.z for p in far) - min(p.z for p in far)) if far else 0.0)
+    check(abs(max(spans) - 80.0) < 0.5, f"the far rod came through whole ({max(spans):.1f} ~ 80)")
+
+
+def test_freehand_connector_fits_the_loop():
+    """The pin on a freehand cut is measured from the loop, not from a bundle of rays."""
+    print("== freehand connector is measured from the loop it was drawn on")
+    reset_scene()
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=True, segments=64, radius1=12.0, radius2=12.0, depth=100.0)
+    me = bpy.data.meshes.new("Rod")
+    bm.to_mesh(me)
+    bm.free()
+    rod = bpy.data.objects.new("Rod", me)
+    bpy.context.scene.collection.objects.link(rod)
+    bpy.context.view_layer.update()
+
+    margin = 0.6  # what the tool pushes the drawn loop out by, so its rim clears the model
+    pts = []
+    for i in range(40):
+        ang = 2.0 * math.pi * i / 40
+        nrm = Vector((math.cos(ang), math.sin(ang), 0.0))
+        pts.append(nrm * (12.0 + margin) + Vector((0.0, 0.0, 6.0 * math.cos(ang))))
+    verts, faces = surfaces.loop_patch(pts, detail=3)
+
+    centre, _normal, inscribed = plan.contact_frame(
+        bpy.context, rod, verts, faces, center_hint=Vector((0, 0, 0)), is_cut_face=True, shrink=margin * 2.0
+    )
+    check(abs(inscribed - 24.0) < 1.0, f"pin sized to the rod, not to the loop's clearance ({inscribed:.2f} ~ 24)")
+    check(centre.xy.length < 1.0, f"and placed in the middle of the cut face ({centre})")
 
 
 def test_printer_fit():
@@ -155,6 +327,20 @@ def test_printer_fit():
         check(abs((pmx.x - pmn.x) - 6.0) < 1e-4, f"pin stays {pmx.x - pmn.x:.3f} mm across at gap {gap:.2f}")
         for m in (pin, socket):
             mesh_utils.remove_mesh(m)
+
+
+def test_version():
+    """The sidebar must never show a version other than the one Blender installed."""
+    print("== version")
+    import tomllib
+
+    from easy_slice_print import version as ver
+
+    with open(os.path.join(ROOT, "easy_slice_print", "blender_manifest.toml"), "rb") as fh:
+        manifest = tomllib.load(fh)
+    check(ver.VERSION == manifest["version"], f"version {ver.VERSION} == manifest {manifest['version']}")
+    check(ui.VERSION == manifest["version"], "the panel reads the manifest version")
+    check(ver.STAGE in ("", "alpha", "beta"), f"stage {ver.STAGE!r}")
 
 
 def test_register():
@@ -284,10 +470,14 @@ def test_unregister():
 
 
 if __name__ == "__main__":
+    test_version()
     test_register()
     test_plan_workflow()
     test_quick_mode()
     test_printer_fit()
+    test_curve_cut_stops_at_the_model()
+    test_freehand_connector_fits_the_loop()
+    test_plane_section_preview()
     test_unregister()
     print(f"\n{len(FAILS)} failure(s)")
     for f in FAILS:

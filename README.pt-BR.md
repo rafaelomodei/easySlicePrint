@@ -8,6 +8,7 @@
 <p align="center">
   <a href="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/rafaelomodei/easySlicePrint/releases"><img alt="Release" src="https://img.shields.io/github/v/release/rafaelomodei/easySlicePrint?include_prereleases"></a>
+  <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-yellow">
   <img alt="Blender 4.2 – 5.2" src="https://img.shields.io/badge/Blender-4.2%20%E2%80%93%205.2-orange">
   <a href="LICENSE"><img alt="Licença: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue"></a>
   <a href="CODE_OF_CONDUCT.md"><img alt="Código de Conduta" src="https://img.shields.io/badge/code%20of%20conduct-Contributor%20Covenant%202.1-purple"></a>
@@ -18,6 +19,14 @@
   <a href="https://github.com/rafaelomodei/easySlicePrint/releases/latest"><strong>Download</strong></a> ·
   <em>English: see <a href="README.md">README.md</a></em>
 </p>
+
+> [!WARNING]
+> **Versão alfa.** O EasySlice Print ainda está em desenvolvimento ativo. Espere bugs e arestas:
+> um corte pode falhar ou sair errado em algumas malhas, e o add-on muda entre versões, então um
+> plano salvo em uma versão pode não ser reconstruído da mesma forma na seguinte. Mantenha um
+> backup do seu `.blend`, confira cada peça antes de imprimir e
+> [abra uma issue](https://github.com/rafaelomodei/easySlicePrint/issues) quando algo der
+> errado — é isso que leva o projeto até uma 1.0 estável.
 
 <!-- TODO(media): grave a demo, coloque os arquivos em docs/media/ e descomente.
      A lista de capturas está em docs/media/README.md.
@@ -77,10 +86,26 @@ Testado headless no Blender 4.2.23 LTS e 5.2.1 LTS (o CI roda os dois). Funciona
    * Plane: arraste uma linha atravessando o modelo (ou clique, clique). `Esc` cancela.
    * Curve: desenhe uma linha sobre o modelo cruzando toda a silhueta.
 
-   A superfície de corte é criada do tamanho do que você desenhou — o comprimento do traço e
-   apenas a profundidade que o modelo ocupa embaixo dele — então o corte atinge só a região que
-   você marcou, e não tudo o que estiver no mesmo plano. *Surface Margin* define o quanto ela
-   avança além do traço; aumente se um corte avisar que não separou a peça.
+   O corte **Plane** tira a superfície do próprio modelo: a linha que você arrasta escolhe o
+   plano e diz que partes dele cortar, e a superfície de corte é a seção transversal do modelo
+   ali — exatamente a área por onde a peça vai ser cortada. Toda região que a sua linha cruza é
+   cortada, e só essas: trace sobre uma perna do personagem e a outra fica intacta; arraste de
+   ponta a ponta e a espada e as asas vêm junto. Se um corte avisar que a peça continua inteira,
+   ele diz quantas regiões o plano cruza que a sua linha não pegou — as metades seguem unidas por
+   elas, então passe a linha por cima delas também. Mova ou gire o preview no Plan Mode e a seção
+   é refeita onde ele parar.
+
+   O corte **Curve** segue o modelo do mesmo jeito: cada ponto do traço vai exatamente até onde
+   vai o material embaixo dele, e só atravessa o bloco de material em que o traço está apoiado —
+   passe sobre o braço da frente e o corpo atrás fica intacto. Um traço que sai do fim de um
+   membro para no membro.
+
+   O laço do **Freehand** já é desenhado sobre a superfície, então o laço preenchido já é a face
+   de corte impressa. *Surface Margin* define o quanto a superfície do Curve avança além das
+   pontas do traço.
+
+   Nos três, o conector é o maior círculo que realmente cabe dentro da face de corte: fica onde o
+   material é mais grosso e tem a largura que esse material permite.
    * Freehand: desenhe na superfície em volta do modelo. Solte o botão, orbite com o `botão do meio`
      para trazer o outro lado à vista e desenhe de novo — o laço continua entre as visões.
      O trecho do laço escondido atrás do modelo aparece esmaecido; o salto entre dois traços
@@ -112,6 +137,8 @@ Conectores precisam ser rígidos (sem articulações).
 
 ## Requisitos e limitações
 
+* **Alfa:** em desenvolvimento ativo. Bugs são esperados, a interface e os dados do plano ainda
+  mudam entre versões, e nenhum corte deve ir para a impressora sem conferir as peças antes.
 * Blender 4.2 – 5.2. Somente malhas fechadas e manifold; malhas abertas, auto-intersectadas ou quebradas geram booleanos errados.
 * O tempo depende da quantidade de polígonos e do solver booleano (Preferences). O solver *Manifold*
   (Blender 4.5+) é usado automaticamente quando existe, *Exact* como fallback.

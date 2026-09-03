@@ -35,7 +35,12 @@ jobs:
       - name: Extract changelog section
         run: |
           ver="${GITHUB_REF_NAME#v}"
-          awk -v ver="$ver" '/^## /{p = index($0, "[" ver "]") || index($0, " " ver " ")} p' CHANGELOG.md > RELEASE_NOTES.md
+          {
+            echo "> **Alpha release.** EasySlice Print is under active development: expect bugs, and"
+            echo "> check every part before you print it. Please report anything that goes wrong."
+            echo
+          } > RELEASE_NOTES.md
+          awk -v ver="$ver" '/^## /{p = index($0, "[" ver "]") || index($0, " " ver " ")} p' CHANGELOG.md >> RELEASE_NOTES.md
           cat RELEASE_NOTES.md
 
       - name: GitHub release
@@ -44,3 +49,4 @@ jobs:
           files: dist/*.zip
           body_path: RELEASE_NOTES.md
           generate_release_notes: true
+          prerelease: true   # alpha: flag every release as a pre-release until 1.0

@@ -41,6 +41,12 @@ const es: Dict = {
     fine: "{license} · Add-on de Blender · Exporta STL / OBJ / FBX en milímetros",
   },
 
+  status: {
+    pill: "Alfa",
+    note:
+      "<strong>Versión alfa.</strong> {name} sigue en desarrollo activo: espera fallos y aristas. Un corte puede fallar o salir mal en algunas mallas, y un plan guardado con una versión puede no reconstruirse igual en la siguiente. Guarda una copia de tu <code>.blend</code>, revisa cada pieza antes de imprimirla y avisa en GitHub de lo que salga mal.",
+  },
+
   workflow: {
     eyebrow: "Flujo de trabajo",
     title: "Tres pasos de un modelo a piezas imprimibles",

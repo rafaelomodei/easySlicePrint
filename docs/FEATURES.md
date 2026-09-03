@@ -4,11 +4,19 @@ EasySlice Print targets the workflow professional model cutters expect (studied 
 material about commercial cutting add-ons — landing pages, docs and tutorial videos). Everything
 below is an original implementation; nothing was copied.
 
+> **Alpha.** The add-on is under active development: every feature below is implemented and
+> covered by the headless tests, but bugs are expected, and both the UI and the plan data stored
+> in the `.blend` still change between releases.
+
 | Workflow need | EasySlice Print | Where |
 |---|---|---|
 | Two ways of working: immediate vs. planned | **Quick Cut** / **Plan Mode** toggle | `ESP_PT_main` |
 | Straight cut drawn in the viewport | **Plane Cut** (drag a line; plane contains the view direction) | `ops_tools.ESP_OT_cut_straight` |
-| Cut only the region that was marked | every patch is sized to the stroke: as wide/long as it was drawn, only as deep as the model reaches underneath (ray marched), plus a *Surface Margin* | `CutToolBase.model_span`, `surfaces.rect_patch` |
+| Cut only the regions that were marked | a Plane cut's surface is the model's own cross section on the drawn plane, over every region the line ran across and only those - draw across one leg and the other is untouched, drag across the whole figure and the sword comes too | `section.plane_section` |
+| A curve that stops where the model does | every column of the ribbon runs as deep as the material under it and no further, through the run of material the stroke is standing on - a curve across the near arm leaves the body behind it alone | `plan.ribbon_surfaces`, `section.band_around` |
+| Cut surface that is the real printed area | the plane section is filled from the mesh itself, so a hollow part sections into an annulus | `section.plane_section` |
+| Connector that actually fits the cut face | on all three tools the pin is the largest circle that fits inside the real cut face, so a face shaped like a chest plus a sword still puts the pin in the chest, and a hollow part puts it in the wall | `section.inscribed_circle` |
+| A cut that cannot separate says why | a plane crossing a wing or a base the line missed leaves the halves joined through it; the message names how many regions were left out instead of repeating "cross the whole part" | `cutting.still_joined_message` |
 | Curved cut following a drawn line | **Curve Cut** (stroke → ribbon extruded along the view) | `ESP_OT_cut_curved` |
 | Cut that wraps around a limb / neck | **Freehand Cut** (closed loop on the surface, loop filled) | `ESP_OT_cut_freehand` |
 | Reach the far side of the model while marking | orbit between strokes; the loop is kept in world space, hidden parts drawn faded, auto-close only on a visible start point, `Ctrl+Z` undoes a stroke, `Enter`/`C` close from any angle | `ESP_OT_cut_freehand` |

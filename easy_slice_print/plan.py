@@ -7,7 +7,7 @@ import bpy
 from bpy.app.handlers import persistent
 from mathutils import Matrix, Vector
 
-from .core import connectors, cutting, mesh_utils, surfaces
+from .core import connectors, cutting, mesh_utils, section, surfaces
 from .core.units import mm_to_bu
 from .props import connector_props
 
@@ -38,6 +38,12 @@ class ContactData:
         self.through = None  # direction through the model at `hit`
         self.center_hint = None  # alternative: a point inside the part
         self.anchor = Vector((0.0, 0.0, 0.0))
+        self.plane_co = None  # plane cuts: a point on the cut plane ...
+        self.plane_no = None  # ... and its normal, so the section can be rebuilt
+        self.span = None  # (axis, lo, hi): the stroke, measured from plane_co
+        self.cutter = None  # what the boolean subtracts, when it is not the patch itself
+        self.is_cut_face = False  # the patch is the real printed cut face, edge to edge
+        self.regions_skipped = 0  # regions the plane crosses that the stroke missed
 
 
 # ----------------------------------------------------------------------------
@@ -142,6 +148,123 @@ def resolve_target(context):
 
 
 # ----------------------------------------------------------------------------
+# cross sections (plane cuts)
+# ----------------------------------------------------------------------------
+SECTION_MARGIN = 0.01  # of the section's own bounding box
+
+
+def straight_section(context, target, plane_co, plane_no, span=None, reference=None):
+    """The model's own cross section on a plane, grown by a hair. None if it fails.
+
+    This is what a plane cut uses as its surface: the area the print will actually be
+    cut through, taken from the model's geometry, instead of a rectangle drawn around
+    the mouse stroke. `span` is the stroke - every region of the model the line ran
+    across is cut, and only those, so one leg goes and the other stays.
+
+    An open or non manifold mesh may not section at all; the caller falls back to the
+    old rectangle in that case rather than leaving the user without a cut.
+    """
+    if target is None or target.type != 'MESH':
+        return None
+    state = ensure_evaluable(target)
+    try:
+        depsgraph = context.evaluated_depsgraph_get()
+        res = section.plane_section(target, plane_co, plane_no, span=span, reference=reference, depsgraph=depsgraph)
+    except Exception:
+        return None
+    finally:
+        restore_visibility(target, state)
+    if res is None:
+        return None
+    verts, faces = res
+    margin = max(section.section_extent(verts) * SECTION_MARGIN, mesh_utils.object_world_diagonal(target) * 0.002)
+    grown_v, grown_f = section.grow_section(verts, faces, margin, plane_no)
+    return section.SectionResult(grown_v, grown_f, islands=res.islands, kept=res.kept, cutter=res.cutter)
+
+
+# ----------------------------------------------------------------------------
+# cut surfaces that follow the model (curve cuts)
+# ----------------------------------------------------------------------------
+def column_runs(context, target, columns, direction, ref):
+    """Per column, the runs of material along `direction`, measured from `ref`.
+
+    Every crossing along the ray is collected, so a closed mesh gives entry/exit pairs:
+    one run for a solid limb, two for a hollow one. -> list of lists of (lo, hi).
+    """
+    diag = mesh_utils.object_world_diagonal(target)
+    d = Vector(direction).normalized()
+    eps = diag * 1e-4
+    state = ensure_evaluable(target)
+    out = []
+    try:
+        depsgraph = context.evaluated_depsgraph_get()
+        for p in columns:
+            start = Vector(p) - d * diag * 2.0
+            base = (start - Vector(ref)).dot(d)
+            hits = mesh_utils.object_ray_hits(target, start, d, eps, depsgraph, max_dist=diag * 4.0)
+            out.append([(base + hits[i], base + hits[i + 1]) for i in range(0, len(hits) - 1, 2)])
+    finally:
+        restore_visibility(target, state)
+    return out
+
+
+def ribbon_surfaces(context, target, points, view, extend, detail, pad_factor=0.02):
+    """The pair of surfaces a curve cut needs. -> (preview, cutter, band) or None.
+
+    `preview` follows the model: every column of the ribbon runs exactly as deep as the
+    material under it, and a column with nothing under it is dropped, so a stroke drawn
+    past the end of a limb stops at the limb. `cutter` is what the boolean subtracts:
+    the same ribbon at one depth for its whole length, reaching past the model on both
+    sides - a rim in free space, for the same reason `section.clip_rect` exists.
+
+    `band` is the run of material the stroke is standing on, widened half way into the
+    empty gaps beside it. That is what keeps a curve drawn across the near leg from
+    reaching through the far one, which one depth range taken from the furthest hit
+    anywhere under the stroke could not do.
+    """
+    if target is None or target.type != 'MESH':
+        return None
+    d = Vector(view).normalized()
+    try:
+        columns = surfaces.ribbon_samples(points, extend, detail)
+    except ValueError:
+        return None
+    ref = sum((Vector(p) for p in points), Vector((0.0, 0.0, 0.0))) / len(points)
+    try:
+        runs = column_runs(context, target, columns, d, ref)
+    except Exception:
+        return None
+    flat = [r for col in runs for r in col]
+    if not flat:
+        return None
+    diag = mesh_utils.object_world_diagonal(target)
+    ts = sorted((Vector(p) - ref).dot(d) for p in points)
+    anchor = ts[len(ts) // 2]
+    band = section.band_around(flat, anchor, diag * pad_factor)
+    if band is None:
+        return None
+    # `column_runs` measures along the ray from one shared reference; a ribbon column
+    # is extruded from its own point, so every range has to be rebased onto it
+    trimmed, flat_band = [], []
+    for col, p in zip(runs, columns):
+        offset = (Vector(p) - ref).dot(d)
+        flat_band.append((band[0] - offset, band[1] - offset))
+        within = [(max(lo, band[0]), min(hi, band[1])) for lo, hi in col if hi > band[0] and lo < band[1]]
+        # one span from the first entry to the last exit: a column crossing a hollow
+        # limb still has to hold the two halves of the surface together
+        if within:
+            trimmed.append((min(a for a, _b in within) - offset, max(b for _a, b in within) - offset))
+        else:
+            trimmed.append(None)
+    try:
+        preview = surfaces.ribbon_patch(points, d, 0.0, extend, detail=detail, depth_ranges=trimmed)
+    except ValueError:
+        return None
+    cutter = surfaces.ribbon_patch(points, d, 0.0, extend, detail=detail, depth_ranges=flat_band)
+    return preview, cutter, band
+
+
+# ----------------------------------------------------------------------------
 # preview objects
 # ----------------------------------------------------------------------------
 def _material(name, rgba):
@@ -200,11 +323,24 @@ def create_surface_object(context, name, data, target=None):
     obj["esp_extend"] = data.extend
     obj["esp_margin"] = data.margin
     obj["esp_detail"] = data.detail
+    if data.plane_no is not None and data.plane_co is not None:
+        # stored local, so G / R / S on the preview move the plane with the object and
+        # the section can be taken again from wherever the user parked it
+        obj["esp_plane_co"] = list(Vector(data.plane_co) - origin)
+        obj["esp_plane_no"] = list(data.plane_no)
+        obj["esp_ref"] = list(Vector(data.anchor) - origin)
+        obj["esp_cut_face"] = data.is_cut_face
+        obj["esp_skipped"] = data.regions_skipped
+        if data.span is not None:
+            obj["esp_span_u"] = list(data.span[0])
+            obj["esp_span"] = [data.span[1], data.span[2]]
     if data.hit is not None:
         obj["esp_hit"] = list(data.hit)
         obj["esp_through"] = list(data.through)
     if data.center_hint is not None:
         obj["esp_center_hint"] = list(data.center_hint)
+    obj["esp_cut_face"] = data.is_cut_face
+    set_cutter(obj, [Vector(p) - origin for p in data.cutter[0]] if data.cutter else None, data.cutter)
     obj["esp_mw"] = [v for row in obj.matrix_world for v in row]
     return obj
 
@@ -218,7 +354,7 @@ def set_surface_points(obj, points):
     obj["esp_points"] = [c for p in points for c in p]
 
 
-def rebuild_surface(obj, draft=False):
+def rebuild_surface(obj, draft=False, context=None, target=None):
     """Regenerate the patch from its control points.
 
     `draft` halves the spline resolution and cuts the membrane relaxation short; it is
@@ -232,18 +368,102 @@ def rebuild_surface(obj, draft=False):
         detail = max(1, detail // 2)
     if kind == 'CURVED' and len(pts) >= 2:
         # the control points are local to the object; the stored view direction is world
-        view = (obj.matrix_basis.to_3x3().inverted_safe() @ Vector(obj["esp_view"])).normalized()
-        verts, faces = surfaces.ribbon_patch(
-            pts, view, 0.0, obj["esp_extend"], depth_range=tuple(obj["esp_depth"]), detail=detail
-        )
+        mw = obj.matrix_basis
+        world_view = Vector(obj["esp_view"]).normalized()
+        built = None
+        if context is not None and target is not None:
+            built = ribbon_surfaces(context, target, [mw @ p for p in pts], world_view, obj["esp_extend"], detail)
+        if built is not None:
+            preview, cutter, band = built
+            inv = mw.inverted_safe()
+            verts = [inv @ v for v in preview[0]]
+            faces = preview[1]
+            obj["esp_depth"] = list(band)
+            set_cutter(obj, [inv @ Vector(p) for p in cutter[0]], cutter)
+        else:
+            # no model to measure against: one depth for the whole ribbon, as before
+            view = (mw.to_3x3().inverted_safe() @ world_view).normalized()
+            verts, faces = surfaces.ribbon_patch(
+                pts, view, 0.0, obj["esp_extend"], depth_range=tuple(obj["esp_depth"]), detail=detail
+            )
+            set_cutter(obj, None, None)
     elif kind == 'FREEHAND' and len(pts) >= 3:
         verts, faces = surfaces.loop_patch(pts, detail=detail, passes=6 if draft else None)
+    elif kind == 'STRAIGHT':
+        patch = rebuilt_section(obj, context, target)
+        if patch is None:
+            return
+        verts, faces = patch
     else:
         return
     me = obj.data
     me.clear_geometry()
     me.from_pydata([tuple(v) for v in verts], [], [tuple(f) for f in faces])
     me.update()
+
+
+def rebuilt_section(obj, context, target):
+    """Section the model again on the preview's current plane. Local space, or None.
+
+    A plane cut carries no control points; what it carries is the plane itself, so a
+    moved or rotated preview re-slices the model rather than dragging a stale outline
+    around. Scaling a section has no effect - the section is the model's own area, and
+    there is nothing to scale it to.
+    """
+    if context is None or target is None or "esp_plane_no" not in obj:
+        return None
+    mw = obj.matrix_basis
+    rot = mw.to_3x3()
+    no = (rot.inverted_safe().transposed() @ Vector(obj["esp_plane_no"])).normalized()
+    co = mw @ Vector(obj["esp_plane_co"])
+    ref = mw @ Vector(obj["esp_ref"]) if "esp_ref" in obj else None
+    span = None
+    if "esp_span_u" in obj:
+        lo, hi = obj["esp_span"]
+        span = ((rot @ Vector(obj["esp_span_u"])).normalized(), lo, hi)
+    patch = straight_section(context, target, co, no, span, ref)
+    if patch is None:
+        return None
+    obj["esp_skipped"] = patch.islands - patch.kept
+    inv = mw.inverted_safe()
+    cutter = patch.cutter
+    set_cutter(obj, [inv @ Vector(p) for p in cutter[0]] if cutter else None, cutter)
+    verts, faces = patch
+    return [inv @ v for v in verts], faces
+
+
+def set_cutter(obj, local_verts, cutter):
+    """Store what the boolean should subtract, in the preview's own space.
+
+    Only a surface whose own rim would sit on the model needs one - a plane cut's
+    section and a curve cut's silhouette hugging ribbon. A freehand loop is drawn a
+    little outside the surface already, so it subtracts what it shows.
+    """
+    if not local_verts or cutter is None:
+        for key in ("esp_cutter", "esp_cutter_f"):
+            if key in obj:
+                del obj[key]
+        return
+    obj["esp_cutter"] = [c for p in local_verts for c in p]
+    obj["esp_cutter_f"] = [i for f in cutter[1] for i in f]
+
+
+def cutter_world_patch(obj):
+    """(verts, faces) the boolean should subtract, or the preview's own mesh.
+
+    A plane cut hands the boolean a quad and a curve cut a ribbon at one depth, both
+    reaching past the model instead of stopping on it; see `section.clip_rect` for why
+    a rim on the surface is the thing to avoid. A freehand loop, and any surface built
+    by the fallbacks, subtracts exactly what it shows.
+    """
+    flat_co = list(obj.get("esp_cutter", []))
+    quads = list(obj.get("esp_cutter_f", []))
+    if len(flat_co) < 12 or len(quads) < 4:
+        return surface_world_patch(obj)
+    mw = obj.matrix_basis
+    verts = [mw @ Vector(flat_co[i : i + 3]) for i in range(0, len(flat_co) - 2, 3)]
+    faces = [tuple(quads[i : i + 4]) for i in range(0, len(quads) - 3, 4)]
+    return verts, faces
 
 
 def surface_world_patch(obj):
@@ -287,7 +507,26 @@ def unflat(vals):
 # ----------------------------------------------------------------------------
 # frames & sizes
 # ----------------------------------------------------------------------------
-def contact_frame(context, target, verts, faces, hit=None, through=None, center_hint=None):
+def contact_frame(
+    context, target, verts, faces, hit=None, through=None, center_hint=None, is_cut_face=False, shrink=0.0
+):
+    """-> (centre, normal, inscribed diameter) for the connector on this cut surface.
+
+    When the surface is the real printed cut face - a plane section, a ribbon trimmed
+    to the model, a freehand loop drawn on it - the answer is exact and cheap: the
+    largest circle that fits inside it. A surface that covers more than the printed
+    face (a fallback rectangle, an untrimmed ribbon) says nothing about where the
+    material is, and the ray based estimate is still the best available.
+
+    `shrink` comes off the diameter: a freehand loop is drawn a hair outside the model
+    so its rim clears the surface, and that hair would otherwise be measured as
+    material the pin could grow into.
+    """
+    if is_cut_face:
+        normal = surfaces.patch_normal(verts, faces)
+        found = section.inscribed_circle(verts, faces, normal)
+        if found is not None:
+            return found[0], normal, max(found[1] - shrink, found[1] * 0.2)
     bvh = mesh_utils.bvh_from_pydata(verts, faces)
     diag = mesh_utils.object_world_diagonal(target)
     state = ensure_evaluable(target)
@@ -422,7 +661,15 @@ def add_record(context, target, cut_type, contacts):
             sobj = create_surface_object(context, f"ESP_Surface_{rec.name}_{'AB'[i]}", data, target)
             _set_contact_attr(rec, "surface", i, sobj.name)
             center, normal, inscribed = contact_frame(
-                context, target, data.verts, data.faces, data.hit, data.through, data.center_hint
+                context,
+                target,
+                data.verts,
+                data.faces,
+                data.hit,
+                data.through,
+                data.center_hint,
+                data.is_cut_face,
+                data.margin * 2.0,
             )
             _set_contact_attr(rec, "center", i, center)
             _set_contact_attr(rec, "normal", i, normal)
@@ -525,6 +772,8 @@ def refresh_record_frames(context, rec):
         sobj = bpy.data.objects.get(_contact_attr(rec, "surface", i))
         if sobj is None:
             continue
+        if sobj.get("esp_kind") == 'STRAIGHT':
+            rebuild_surface(sobj, context=context, target=target)
         verts, faces = surface_world_patch(sobj)
         hit = Vector(sobj["esp_hit"]) if "esp_hit" in sobj else None
         through = Vector(sobj["esp_through"]) if "esp_through" in sobj else None
@@ -533,7 +782,17 @@ def refresh_record_frames(context, rec):
             # a moved plane: re-anchor the hit onto the new plane along the view direction
             hint, hit = _reanchor_plane(verts, faces, hit, through, hint)
         try:
-            center, normal, inscribed = contact_frame(context, target, verts, faces, hit, through, hint)
+            center, normal, inscribed = contact_frame(
+                context,
+                target,
+                verts,
+                faces,
+                hit,
+                through,
+                hint,
+                bool(sobj.get("esp_cut_face", False)),
+                float(sobj.get("esp_margin", 0.0)) * 2.0,
+            )
         except Exception:
             continue
         _set_contact_attr(rec, "center", i, center)
@@ -619,10 +878,14 @@ def record_spec(context, rec, settings, remesh=True):
         sobj = bpy.data.objects.get(_contact_attr(rec, "surface", i))
         if sobj is None:
             raise cutting.CutError(f"Preview surface of '{rec.name}' is missing")
-        verts, faces = surface_world_patch(sobj)
+        verts, faces = cutter_world_patch(sobj)
         pin = bpy.data.objects.get(_contact_attr(rec, "pin", i))
         pm = pin.matrix_basis.copy() if (rec.add_pin and pin is not None) else None
-        contacts.append(cutting.ContactSpec(verts, faces, rec.add_pin, pm, shape, custom))
+        contacts.append(
+            cutting.ContactSpec(
+                verts, faces, rec.add_pin, pm, shape, custom, regions_skipped=int(sobj.get("esp_skipped", 0))
+            )
+        )
     u = mm(context)
     return cutting.CutSpec(
         contacts=contacts,
@@ -648,11 +911,20 @@ def quick_spec(context, target, contacts):
         pm = None
         if settings.add_pin:
             center, normal, inscribed = contact_frame(
-                context, target, data.verts, data.faces, data.hit, data.through, data.center_hint
+                context,
+                target,
+                data.verts,
+                data.faces,
+                data.hit,
+                data.through,
+                data.center_hint,
+                data.is_cut_face,
+                data.margin * 2.0,
             )
             w, h = contact_size_bu(context, settings, inscribed)
             pm = connectors.connector_matrix(center, cutting.protrude_direction(normal, settings.pin_side), w, h)
-        specs.append(cutting.ContactSpec(data.verts, data.faces, settings.add_pin, pm, shape, custom))
+        verts, faces = data.cutter if data.cutter is not None else (data.verts, data.faces)
+        specs.append(cutting.ContactSpec(verts, faces, settings.add_pin, pm, shape, custom, data.regions_skipped))
     u = mm(context)
     return cutting.CutSpec(
         contacts=specs,
@@ -667,16 +939,34 @@ def quick_spec(context, target, contacts):
 # ----------------------------------------------------------------------------
 # follow moved cut planes (G/R/S on the preview) -> re-place the pin
 # ----------------------------------------------------------------------------
-_dirty = set()
+_dirty = {}  # surface object name -> the transform it carried when it was marked
 
 
 def _refresh_dirty():
+    """Re-place the pin (and, for a plane cut, re-take the section) once the drag stops.
+
+    Re-sectioning the model is far too heavy to run on every mouse move of a G, so the
+    timer keeps re-arming itself while the preview is still moving and only does the
+    work once its transform has held still for a tick.
+    """
     global _dirty
-    names = list(_dirty)
-    _dirty = set()
     scene = bpy.context.scene
     if scene is None:
+        _dirty = {}
         return None
+    moving = False
+    for name, seen in list(_dirty.items()):
+        obj = bpy.data.objects.get(name)
+        if obj is None:
+            continue
+        cur = tuple(flat(obj.matrix_basis))
+        if cur != seen:
+            _dirty[name] = cur
+            moving = True
+    if moving:
+        return 0.1
+    names = list(_dirty)
+    _dirty = {}
     for rec in scene.esp.cuts:
         if rec.surface_a in names or rec.surface_b in names:
             try:
@@ -704,7 +994,7 @@ def depsgraph_handler(scene, depsgraph):
             if old is None or any(abs(a - b) > 1e-6 for a, b in zip(cur, old)):
                 obj["esp_mw"] = cur
                 if old is not None:
-                    _dirty.add(name)
+                    _dirty[name] = tuple(cur)
                     changed = True
     if changed and not bpy.app.timers.is_registered(_refresh_dirty):
         bpy.app.timers.register(_refresh_dirty, first_interval=0.05)
@@ -718,3 +1008,4 @@ def register():
 def unregister():
     if depsgraph_handler in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(depsgraph_handler)
+    section.free_cache()

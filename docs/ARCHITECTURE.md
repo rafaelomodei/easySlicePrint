@@ -23,16 +23,44 @@ easy_slice_print/
 ## The cut pipeline (`core/cutting.py`)
 
 1. **Patch** — every tool produces an open mesh in world space:
-   * plane: one quad built around the drawn segment - as wide as the line, and only as deep as
-     the model reaches underneath it (rays marched through every crossing), plus *Surface
-     Margin* on each side (`surfaces.rect_patch`, `CutToolBase.model_span`);
+   * plane: the model's own cross section on the drawn plane. The mesh is bisected by the
+     plane, the resulting loops are filled (a hollow part sections into an annulus) and the fill
+     is split into connected islands - one per region the plane crosses. Every island whose span
+     along the drawn direction overlaps the stroke is kept: the plane contains the view
+     direction, so on screen it collapses onto the line, and "the regions the line ran across" is
+     literally an interval overlap (`section.plane_section`, `plan.straight_section`). The line
+     picks the plane and the regions; it has no say in how big the surface is.
+
+     What the boolean subtracts is **not** that section. A section's rim runs along the model's
+     surface for its whole length, and an exact boolean asked to resolve that many near tangent
+     intersections comes back with slivers or with a part that never separated - measurably
+     worse than the oversized quad it replaced, and worse still as the rim is pushed further out,
+     because offsetting a concave outline folds it over itself. So the cutter is a quad
+     (`section.clip_rect`): it runs out past the model on every side with nothing to protect and
+     pulls in only where a region has to be spared, stopping in the middle of the empty gap. Same
+     result as subtracting the section - the extra area covers nothing but air - with a rim the
+     solver can resolve. Only when regions are interleaved along both axes, and no quad
+     separates them, does the section itself go to the boolean.
+
+     A moved or rotated preview re-sections the model and rebuilds the quad (`plan.rebuilt_section`,
+     driven from `plan.refresh_record_frames`). If the mesh cannot be sectioned at all - open or
+     non manifold - the tool falls back to the old quad around the stroke (`surfaces.rect_patch`,
+     `CutToolBase.model_span`);
    * curve: the stroke (resampled to *Control Points*, then splined to *Surface Detail* samples
-     per segment) extruded along the view direction, over the depth the model occupies under the
-     stroke and extended past its ends by *Surface Margin* (`surfaces.ribbon_patch`);
+     per segment) extruded along the view direction and extended past its ends by *Surface
+     Margin* (`surfaces.ribbon_patch`). Depth is measured per column: rays are marched under
+     every splined sample, and `section.band_around` - the one dimensional `clip_rect` - picks
+     the run of material the stroke is standing on and widens it half way into the empty gaps
+     beside it. The preview then gives each column its own span so the surface follows the
+     silhouette (a column with nothing under it is dropped), while the boolean gets the same
+     ribbon at one flat depth, past the model on both sides (`plan.ribbon_surfaces`). One depth
+     range for the whole ribbon, taken from the furthest hit anywhere under the stroke, is what
+     used to make a curve across a figure's near arm reach through the body behind it;
    * freehand: the loop drawn on the surface (over as many strokes and viewpoints as needed —
      samples are stored in world space, so orbiting between strokes keeps the loop), pushed a
-     little outward along the surface normals, smoothed, resampled, splined, and spanned by a
-     relaxed membrane (`surfaces.loop_patch` → `surfaces.membrane_fill`: concentric rings closed
+     little outward along the surface normals - which is also what keeps its rim off the model,
+     so it needs no separate cutter - smoothed, resampled, splined, and spanned by a relaxed
+     membrane (`surfaces.loop_patch` → `surfaces.membrane_fill`: concentric rings closed
      by a centre vertex, then the interior vertices are iterated onto the average of their
      neighbours with the boundary pinned). The fixed point of that iteration is the discrete
      minimal surface through the drawn loop: dead flat for a loop drawn from one viewpoint,

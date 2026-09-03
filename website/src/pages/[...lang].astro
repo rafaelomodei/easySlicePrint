@@ -52,12 +52,14 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
       <div class="hero-grid">
         <div class="hero-copy">
           <div class="pills">
+            <span class="pill warn">{t.status.pill}</span>
             <span class="pill teal" set:html={t.hero.pillFree} />
             <span class="pill">{t.hero.pillBlender}</span>
             <span class="pill">{t.hero.pillPlatforms}</span>
           </div>
           <h1>{t.hero.titleLead} <span class="grad">{t.hero.titleAccent}</span></h1>
           <p class="lead">{t.hero.lead}</p>
+          <p class="notice" set:html={t.status.note} />
           <div class="cta">
             <a class="btn btn-primary" href="#download">
               {t.hero.download} <small>{t.hero.free}</small>
@@ -238,8 +240,9 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
       <div class="download-box">
         <div>
           <span class="eyebrow">{t.download.eyebrow}</span>
-          <h2>{site.name} v{site.version}</h2>
+          <h2>{site.name} v{site.version} <span class="pill warn">{t.status.pill}</span></h2>
           <p class="muted">{t.download.body}</p>
+          <p class="notice" set:html={t.status.note} />
           <div class="cta">
             <a class="btn btn-primary" href={site.links.downloadZip}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -396,6 +399,10 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
     background:
       radial-gradient(600px 300px at 0% 0%, rgba(255, 138, 61, 0.16), transparent 60%),
       var(--surface);
+  }
+  .download-box h2 .pill {
+    vertical-align: middle;
+    transform: translateY(-2px);
   }
   .download .eyebrow {
     display: inline-block;

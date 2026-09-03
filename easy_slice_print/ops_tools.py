@@ -441,17 +441,11 @@ class ESP_OT_cut_straight(CutToolBase, bpy.types.Operator):
         n = u.cross(d).normalized()
         if n.z < -1e-6 or (abs(n.z) <= 1e-6 and n.x < 0):
             n = -n
-        # the patch is built around the drawn segment, not around the model: as wide as
-        # the line, and only as deep as the model reaches underneath it
         c = (q0 + q1) * 0.5
-        margin = self.surface_margin(context, u.length)
-        depth_axis = n.cross(u.normalized()).normalized()
-        span = self.model_span(context, sample_segment(p0, p1, 17), c, depth_axis) or self.bbox_span(c, depth_axis)
         data = plan.ContactData('STRAIGHT')
-        data.verts, data.faces = surfaces.rect_patch(
-            c, n, u, u.length * 0.5 + margin, (span[0] - margin, span[1] + margin)
-        )
         data.view_dir = d
+        data.plane_co = c
+        data.plane_no = n
         hit, loc, _nor, _dist = self.cast(context, mid)
         if hit:
             data.hit = loc
@@ -460,6 +454,27 @@ class ESP_OT_cut_straight(CutToolBase, bpy.types.Operator):
         else:
             data.center_hint = c
             data.anchor = c
+        # the cut surface is the model's own cross section on this plane - the area the
+        # print is really cut through - taken over every region the line ran across.
+        # The line picks the plane and says which regions to cut; it does not decide
+        # how big the surface is. Drag across one leg and the other is left alone; drag
+        # across the whole figure and the sword and the wings come with it, which is
+        # what stops a cut from removing material without separating anything.
+        half = u.length * 0.5
+        span = (u.normalized(), -half, half)
+        patch = plan.straight_section(context, self.target, c, n, span, loc if hit else c)
+        if patch is not None:
+            data.span = span
+            data.is_cut_face = True
+            data.regions_skipped = patch.islands - patch.kept
+        else:
+            # nothing to section (open or non manifold mesh): fall back to the old
+            # rectangle around the stroke rather than leaving the user without a cut
+            margin = self.surface_margin(context, u.length)
+            depth_axis = n.cross(u.normalized()).normalized()
+            depth = self.model_span(context, sample_segment(p0, p1, 17), c, depth_axis) or self.bbox_span(c, depth_axis)
+            patch = surfaces.rect_patch(c, n, u, half + margin, (depth[0] - margin, depth[1] + margin))
+        data.verts, data.faces = patch
         return self.contact_done(context, data)
 
     def draw(self, context):
@@ -533,21 +548,32 @@ class ESP_OT_cut_curved(CutToolBase, bpy.types.Operator):
             avg += (pts[i + 1] - pts[i]).cross(d)
         if avg.z < -1e-6 or (abs(avg.z) <= 1e-6 and avg.x < 0):
             pts.reverse()
-        # depth range: only as deep as the model reaches under the stroke, and the ends
-        # reach just past it - not half a bounding diagonal in every direction
-        mean = sum(pts, Vector((0.0, 0.0, 0.0))) / len(pts)
         margin = self.surface_margin(context, surfaces.polyline_length(pts))
-        step = max(1, len(stroke) // 24)
-        span = self.model_span(context, stroke[::step], mean, d) or self.bbox_span(mean, d)
         data = plan.ContactData('CURVED')
         data.points = pts
         data.view_dir = d
-        data.depth_range = (span[0] - margin, span[1] + margin)
         data.extend = margin
         data.detail = settings.surface_detail
-        data.verts, data.faces = surfaces.ribbon_patch(
-            pts, d, 0.0, data.extend, depth_range=data.depth_range, detail=data.detail
-        )
+        # the surface follows the model: every column of the ribbon runs exactly as deep
+        # as the material under it, and only over the run of material the stroke is
+        # standing on - a curve across the near leg no longer reaches through the far
+        # one. The boolean gets the same ribbon at one depth, reaching past the model.
+        built = plan.ribbon_surfaces(context, self.target, pts, d, margin, data.detail)
+        if built is not None:
+            preview, cutter, band = built
+            data.verts, data.faces = preview
+            data.cutter = cutter
+            data.depth_range = band
+            data.is_cut_face = True
+        else:
+            # nothing under the stroke to measure: one depth for the whole ribbon
+            mean = sum(pts, Vector((0.0, 0.0, 0.0))) / len(pts)
+            step = max(1, len(stroke) // 24)
+            span = self.model_span(context, stroke[::step], mean, d) or self.bbox_span(mean, d)
+            data.depth_range = (span[0] - margin, span[1] + margin)
+            data.verts, data.faces = surfaces.ribbon_patch(
+                pts, d, 0.0, data.extend, depth_range=data.depth_range, detail=data.detail
+            )
         if hits:
             mid_i = len(stroke) // 2
             _idx, loc = min(hits, key=lambda h: abs(h[0] - mid_i))
@@ -710,6 +736,10 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
         data.margin = margin
         data.detail = settings.surface_detail
         data.verts, data.faces = verts, faces
+        # the loop was drawn on the model and pushed a hair outside it, so the membrane
+        # it spans is the printed cut face: its own outline is where the material ends,
+        # which is exactly what the connector needs to be measured against
+        data.is_cut_face = True
         data.center_hint = centroid
         data.anchor = locs[0]
         return self.contact_done(context, data)

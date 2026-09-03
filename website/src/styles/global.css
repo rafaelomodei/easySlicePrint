@@ -12,6 +12,9 @@
   --accent-soft: rgba(255, 138, 61, 0.14);
   --teal: #3ddc97;
   --teal-soft: rgba(61, 220, 151, 0.14);
+  --warn: #ffcb47;
+  --warn-soft: rgba(255, 203, 71, 0.12);
+  --warn-border: rgba(255, 203, 71, 0.35);
   --radius: 14px;
   --radius-sm: 8px;
   --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
@@ -197,6 +200,30 @@ kbd {
   color: var(--teal);
   background: var(--teal-soft);
   border-color: transparent;
+}
+.pill.warn {
+  color: var(--warn);
+  background: var(--warn-soft);
+  border-color: var(--warn-border);
+}
+
+/* Alpha banner: the project is still under active development. */
+.notice {
+  margin: 1.25rem 0 0;
+  padding: 0.85rem 1.05rem;
+  border: 1px solid var(--warn-border);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.notice strong {
+  color: var(--warn);
+}
+.notice code {
+  color: var(--text);
 }
 
 .grid {

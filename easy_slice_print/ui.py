@@ -6,8 +6,8 @@ import bpy
 
 from . import plan
 from .ops_plan import active_record
+from .version import STAGE, VERSION
 
-VERSION = "0.1.0"
 CATEGORY = "EasySlice"
 TYPE_ICON = {'STRAIGHT': 'MESH_PLANE', 'CURVED': 'CURVE_BEZCURVE', 'FREEHAND': 'GREASEPENCIL'}
 TYPE_LABEL = {'STRAIGHT': "Plane", 'CURVED': "Curve", 'FREEHAND': "Freehand"}
@@ -45,6 +45,8 @@ class ESP_PT_main(ESPPanel, bpy.types.Panel):
         row.label(text=f"EasySlice Print {VERSION}", icon='MOD_BOOLEAN')
         row.operator("esp.check_mesh", text="", icon='CHECKMARK')
         row.operator("esp.open_docs", text="", icon='QUESTION')
+        if STAGE:
+            layout.label(text=f"{STAGE.capitalize()} - expect bugs, check parts", icon='ERROR')
         col = layout.column(align=True)
         col.label(text="Mode")
         col.row(align=True).prop(s, "mode", expand=True)

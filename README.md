@@ -8,6 +8,7 @@
 <p align="center">
   <a href="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/rafaelomodei/easySlicePrint/releases"><img alt="Release" src="https://img.shields.io/github/v/release/rafaelomodei/easySlicePrint?include_prereleases"></a>
+  <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-yellow">
   <img alt="Blender 4.2 – 5.2" src="https://img.shields.io/badge/Blender-4.2%20%E2%80%93%205.2-orange">
   <a href="LICENSE"><img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue"></a>
   <a href="CODE_OF_CONDUCT.md"><img alt="Code of Conduct" src="https://img.shields.io/badge/code%20of%20conduct-Contributor%20Covenant%202.1-purple"></a>
@@ -18,6 +19,14 @@
   <a href="https://github.com/rafaelomodei/easySlicePrint/releases/latest"><strong>Download</strong></a> ·
   <em>Português: veja <a href="README.pt-BR.md">README.pt-BR.md</a></em>
 </p>
+
+> [!WARNING]
+> **Alpha software.** EasySlice Print is still under active development. Expect bugs and rough
+> edges: a cut can fail or come out wrong on some meshes, and the add-on changes between releases,
+> so a plan saved with one version may not rebuild the same way in the next. Keep a backup of your
+> `.blend`, check every part before you print it, and please
+> [open an issue](https://github.com/rafaelomodei/easySlicePrint/issues) when something goes
+> wrong — that is what moves it towards a stable 1.0.
 
 <!-- TODO(media): record the demo and drop the files in docs/media/, then uncomment.
      See docs/media/README.md for the exact shot list.
@@ -77,10 +86,26 @@ Tested headless on Blender 4.2.23 LTS and 5.2.1 LTS (CI runs both). Works on Win
    * Plane: drag a line across the model (or click, click). `Esc` cancels.
    * Curve: draw a line over the model that crosses the whole silhouette.
 
-   The cut surface is built to the size of what you drew — the length of the stroke, and only
-   the depth the model actually occupies underneath it — so a cut touches just the region you
-   marked instead of everything lying in the same plane. *Surface Margin* sets how far past your
-   stroke it reaches; raise it if a cut reports that it did not split the part.
+   A **Plane** cut takes its surface from the model itself: the line you drag picks the plane
+   and says which parts of it to cut, and the cut surface is the model's own cross section
+   there — exactly the area the print is cut through. Every region your line runs across is
+   cut, and only those: draw across one leg of a figure and the other is left alone; drag all
+   the way across and the sword and the wings come too. If a cut reports that the part is still
+   in one piece, it will name how many regions the plane crosses that your line missed — the
+   halves are still joined through those, so draw across them as well. Move or rotate the
+   preview in Plan Mode and the section is taken again wherever it lands.
+
+   A **Curve** cut follows the model the same way: every point along the stroke goes exactly as
+   deep as the material under it, and only through the run of material the stroke is standing on
+   — draw across a figure's near arm and the body behind it is left alone. A stroke that runs off
+   the end of a limb stops at the limb.
+
+   A **Freehand** loop is drawn on the surface already, so its filled loop is the printed cut
+   face as it stands. *Surface Margin* sets how far a Curve surface reaches past the ends of your
+   stroke.
+
+   On all three, the connector is the largest circle that actually fits inside the cut face, so
+   it sits where the material is thickest and is as wide as that material allows.
    * Freehand: draw on the surface around the model. Release the button, orbit with `MMB`
      to bring the far side into view, then draw again — the loop keeps going across views.
      The part of the loop hidden behind the model is drawn faded; the jump between two
@@ -111,6 +136,8 @@ into the socket. Connectors must be rigid (no articulated joints).
 
 ## Requirements & limitations
 
+* **Alpha:** under active development. Bugs are expected, the UI and the plan data still
+  change between releases, and no cut should be printed without checking the parts first.
 * Blender 4.2 – 5.2. Closed manifold meshes only; open, self-intersecting or broken meshes give wrong booleans.
 * Processing time depends on polygon count and the boolean solver (Preferences). The *Manifold* solver
   (Blender 4.5+) is used automatically when available, *Exact* as fallback.

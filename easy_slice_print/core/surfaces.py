@@ -198,22 +198,15 @@ def plane_patch(center, normal, u_dir, size):
     return rect_patch(center, normal, u_dir, h, (-h, h))
 
 
-def ribbon_patch(points, view_dir, depth, extend, depth_range=None, detail=SURFACE_DETAIL):
-    """Stroke `points` extruded along `view_dir`; both ends extended by `extend`.
+def ribbon_samples(points, extend, detail=SURFACE_DETAIL):
+    """The columns a ribbon is built from: the splined stroke plus its two tails.
 
-    Without `depth_range` the ribbon spans -depth..+depth along the view
-    direction; with `depth_range=(t0, t1)` it spans p + view*t0 .. p + view*t1.
-    Face normals == tangent x view_dir (consistent along the ribbon).
-
-    The stroke is splined to `detail` samples per segment before it is extruded, so
-    the cut face is a smooth ruled surface rather than the flat facets of the control
-    polyline. The extension tails are added afterwards and stay straight.
+    Split out of `ribbon_patch` so a caller can measure the model under every column
+    before deciding how deep that column should run.
     """
     pts = [Vector(p) for p in points]
-    t0, t1 = (-depth, depth) if depth_range is None else depth_range
     if len(pts) < 2:
         raise ValueError("ribbon needs at least 2 points")
-    d = Vector(view_dir).normalized()
     pts = spline_polyline(pts, detail)
     if extend > 0.0:
         e0 = pts[0] - pts[1]
@@ -222,14 +215,49 @@ def ribbon_patch(points, view_dir, depth, extend, depth_range=None, detail=SURFA
             pts.insert(0, pts[0] + e0.normalized() * extend)
         if e1.length > 1e-9:
             pts.append(pts[-1] + e1.normalized() * extend)
+    return pts
+
+
+def ribbon_patch(points, view_dir, depth, extend, depth_range=None, detail=SURFACE_DETAIL, depth_ranges=None):
+    """Stroke `points` extruded along `view_dir`; both ends extended by `extend`.
+
+    Without `depth_range` the ribbon spans -depth..+depth along the view
+    direction; with `depth_range=(t0, t1)` it spans p + view*t0 .. p + view*t1.
+    Face normals == tangent x view_dir (consistent along the ribbon).
+
+    `depth_ranges` gives every column its own (t0, t1) instead - one per entry of
+    `ribbon_samples(points, extend, detail)`. That is what lets the surface follow the
+    model's silhouette instead of running to one flat depth for its whole length; a
+    column whose range is empty (`None`) is dropped, so a stroke that overshoots the
+    model does not drag the surface out with it.
+
+    The stroke is splined to `detail` samples per segment before it is extruded, so
+    the cut face is a smooth ruled surface rather than the flat facets of the control
+    polyline. The extension tails are added afterwards and stay straight.
+    """
+    d = Vector(view_dir).normalized()
+    pts = ribbon_samples(points, extend, detail)
+    if depth_ranges is not None:
+        if len(depth_ranges) != len(pts):
+            raise ValueError("depth_ranges must have one entry per ribbon column")
+        ranges = list(depth_ranges)
+    else:
+        ranges = [(-depth, depth) if depth_range is None else tuple(depth_range)] * len(pts)
     verts = []
-    for p in pts:
-        verts.append(p + d * t0)
-        verts.append(p + d * t1)
     faces = []
-    for i in range(len(pts) - 1):
-        a = 2 * i
-        faces.append((a, a + 2, a + 3, a + 1))
+    prev = None  # index of the previous column's first vertex, None across a gap
+    for p, r in zip(pts, ranges):
+        if r is None:
+            prev = None
+            continue
+        here = len(verts)
+        verts.append(p + d * r[0])
+        verts.append(p + d * r[1])
+        if prev is not None:
+            faces.append((prev, here, here + 1, prev + 1))
+        prev = here
+    if not faces:
+        raise ValueError("ribbon has no span over the model")
     return verts, faces
 
 
@@ -381,6 +409,11 @@ def _poly_area(verts, f):
     for i in range(1, len(pts) - 1):
         total += (pts[i] - pts[0]).cross(pts[i + 1] - pts[0])
     return total.length * 0.5
+
+
+def patch_area(verts, faces):
+    """Total area of a patch. For a plane cut that is the real area of the printed face."""
+    return sum(_poly_area(verts, f) for f in faces)
 
 
 def patch_center(verts):

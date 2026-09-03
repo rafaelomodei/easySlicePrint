@@ -244,9 +244,11 @@ class ESP_Settings(bpy.types.PropertyGroup):
     surface_margin: FloatProperty(
         name="Surface Margin",
         description=(
-            "How far the cut surface reaches past the region you drew, as a fraction of the "
-            "stroke. The surface is sized to the stroke, not to the whole model, so a cut only "
-            "touches what you marked - raise this if a cut fails to separate the part"
+            "How far a Curve or Freehand cut surface reaches past the region you drew, as a "
+            "fraction of the stroke. Those surfaces are sized to the stroke, not to the whole "
+            "model, so a cut only touches what you marked - raise this if a cut fails to "
+            "separate the part. Plane cuts ignore it: their surface is the model's own cross "
+            "section, which already covers exactly the area being cut through"
         ),
         default=0.06,
         min=0.0,

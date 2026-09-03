@@ -25,6 +25,7 @@ class ContactSpec:
     pin_matrix: Matrix | None = None  # world; +Z points into the socket part
     shape: str = 'CYLINDER'
     custom_obj: object = None
+    regions_skipped: int = 0  # regions the plane crosses that this surface leaves uncut
 
 
 @dataclass
@@ -58,6 +59,27 @@ def side_sign(point, bvh):
     if loc is None:
         return 1
     return 1 if (point - loc).dot(nor) >= 0.0 else -1
+
+
+def still_joined_message(spec):
+    """Why the boolean removed material and the part still came out in one piece.
+
+    Almost always because the plane crosses the model somewhere the line did not: a
+    wing, a sword, a cloak, the base under the feet. Those regions are left uncut on
+    purpose - it is what keeps a cut across one leg from taking the other with it -
+    but the two halves stay joined through them, so the split never happens. Saying
+    how many were left out turns an unexplainable failure into one instruction.
+    """
+    skipped = max((c.regions_skipped for c in spec.contacts), default=0)
+    if skipped:
+        many = skipped > 1
+        return (
+            "The cut removed material but the part is still in one piece: the cut plane also crosses "
+            f"{skipped} other region{'s' if many else ''} of the model (a wing, a base, an arm) that your "
+            f"line did not run across, and the two halves stay joined through {'them' if many else 'it'}. "
+            f"Draw the cut line across {'those regions' if many else 'that region'} too."
+        )
+    return "The cut surface does not split this part in two. Make the cut cross the whole part."
 
 
 def side_labels(centroid_a, centroid_b):
@@ -159,7 +181,7 @@ def split_mesh_steps(context, mesh, spec):
         for p in orphans:
             (side_a if side_sign(mesh_utils.mesh_centroid(p), bvh) > 0 else side_b).append(p)
         if not side_a or not side_b:
-            raise CutError("The cut surface does not split this part in two. Make the cut cross the whole part.")
+            raise CutError(still_joined_message(spec))
         out = mesh_utils.join_meshes(side_a, "_esp_part_a"), mesh_utils.join_meshes(side_b, "_esp_part_b")
         orphans = []
         return out

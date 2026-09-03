@@ -10,7 +10,7 @@ body:
     id: versions
     attributes:
       label: Blender / EasySlice versions
-      placeholder: "Blender 5.2.1 LTS, EasySlice Print 0.1.0"
+      placeholder: "Blender 5.2.1 LTS, EasySlice Print 0.2.3 (shown at the top of the EasySlice sidebar)"
     validations:
       required: true
   - type: dropdown

@@ -54,6 +54,12 @@ const en = {
     fine: "{license} · Blender add-on · Exports STL / OBJ / FBX in millimetres",
   },
 
+  status: {
+    pill: "Alpha",
+    note:
+      "<strong>Alpha software.</strong> {name} is still under active development: expect bugs and rough edges. A cut can fail or come out wrong on some meshes, and a plan saved with one version may not rebuild the same way in the next. Keep a backup of your <code>.blend</code>, check every part before you print it, and report anything that goes wrong on GitHub.",
+  },
+
   workflow: {
     eyebrow: "Workflow",
     title: "Three steps from a model to printable parts",

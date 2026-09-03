@@ -4,6 +4,77 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **The project is labelled alpha.** README, website, docs and the sidebar panel now say the
+  add-on is under active development: bugs are expected, and the UI and plan data still change
+  between releases.
+
+### Fixed
+- **The sidebar showed the wrong version.** The panel had `0.1.0` hard-coded while the extension
+  shipped as 0.2.3. The version is now read from `blender_manifest.toml` at runtime, so what the
+  panel shows is always the version Blender installed; a test keeps the two in step.
+
+### Changed
+- **A Plane Cut's surface is now the model's own cross section.** It used to be a rectangle built
+  around the mouse stroke: as wide as the line you dragged, and as deep as every ray under that
+  line happened to reach. Because everyone overshoots the stroke to be sure of crossing the part,
+  the samples past the target hit whatever stood behind it, and the patch grew to the size of the
+  whole figure - a huge rectangle reaching into places that had nothing to do with the cut, which
+  could slice a second limb or fail to separate anything at all. The line now only picks the
+  plane: the model is bisected by it, the resulting loops are filled, and the region the line
+  actually crossed is used as the cut surface. That surface is the area the print is really cut
+  through, so the preview matches the printed face, a hollow part sections into an annulus, the
+  connector is sized from the true inscribed circle, and drawing across one leg leaves the other
+  one alone. Moving or rotating the preview in Plan Mode takes the section again where it lands.
+  A mesh that cannot be sectioned (open or non manifold) still falls back to the old rectangle.
+- *Surface Margin* no longer applies to Plane Cuts - a cross section already covers exactly the
+  area being cut. It still controls how far Curve and Freehand surfaces reach past the stroke.
+- **The line now says which regions to cut.** A first pass kept the single region nearest the
+  middle of the stroke, which is right on a figure with one limb in the way and wrong on
+  everything else: a plane through a saint's chest also crosses the sword and the wings, and
+  leaving those uncut means the halves stay joined through them and the cut reports that it split
+  nothing. Every region whose span along the drawn direction overlaps the stroke is now cut - drag
+  across one leg and the other is still spared, drag across the whole figure and everything on
+  the plane comes with it.
+
+- **Curve cuts follow the model too.** A curve used to be extruded to one depth for its whole
+  length, taken from the furthest ray hit anywhere under the stroke - so a line drawn across a
+  figure's near arm reached through the body behind it, and the preview was a slab rather than
+  the face that gets printed. Depth is now measured under every column of the ribbon: the surface
+  runs exactly as deep as the material beneath each point, only through the run of material the
+  stroke is standing on, and a column with nothing under it is dropped so a stroke running off the
+  end of a limb stops at the limb. As with plane cuts, what the boolean subtracts is the same
+  ribbon at one flat depth reaching past the model, so its rim stays in free space.
+- **The connector is measured from the cut face on all three tools.** Plane, curve and freehand
+  cuts all size and place the pin with the largest circle that fits inside the real cut face. A
+  freehand loop is drawn a hair outside the model so its rim clears the surface; that clearance
+  is taken back off the pin, so the pin matches the limb rather than the loop.
+
+### Fixed
+- **Plane cuts that removed material without separating the part.** The boolean was being handed
+  the cross section itself, whose rim runs along the model's surface for its whole length; an
+  exact boolean asked to resolve that many near tangent intersections returns slivers, or a part
+  that never came apart. On a sweep of 23 cut heights through a subdivided Suzanne the section
+  cutter failed 3 times where the old oversized rectangle failed none, and pushing the rim
+  further out made it worse, not better, because offsetting a concave outline folds it over
+  itself. The boolean now gets a quad that runs out past the model and only pulls in where a
+  region has to be spared, stopping in the empty gap between the two. Same result - the extra
+  area covers nothing but air - and 23 of 23 on the same sweep. The preview and the connector
+  still use the real section.
+- **Connectors that ended up tiny and out at the edge of the part.** The pin's position and size
+  came from marching rays out of a guessed centre and taking the middle of their bounding box,
+  which on any cut face that is not roughly convex walks the pin out of the thick part and into a
+  thin appendage - a plane through a figure's chest catches the sword too, and the pin came out a
+  3 mm stub on the blade. The pin is now the largest circle that actually fits inside the cut
+  face, so it sits where the material is thickest and is as wide as that material allows. On a
+  hollow part it lands in the wall instead of the hole.
+- **"Make the cut cross the whole part" on cuts that already crossed it.** When a cut removes
+  material but the part stays in one piece, the message now says how many other regions the
+  plane crosses that the line did not run across - the wing, the base, the sword the halves are
+  still hanging from - instead of repeating advice that no longer applies.
+
 ## [0.2.3] - 2026-08-29
 
 ### Fixed

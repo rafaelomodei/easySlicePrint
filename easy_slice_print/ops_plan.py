@@ -215,7 +215,7 @@ class ESP_OT_edit_surface(bpy.types.Operator):
 
     def commit(self, context, draft=False):
         plan.set_surface_points(self.sobj, self.points)
-        plan.rebuild_surface(self.sobj, draft)
+        plan.rebuild_surface(self.sobj, draft, context=context, target=self.target)
         self.changed = True
 
     def push_history(self):

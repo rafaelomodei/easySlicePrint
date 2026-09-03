@@ -62,7 +62,7 @@ the picker, the `hreflang` tags and the auto-detection pick it up.
 
 ## Replacing the placeholder media
 
-`hero` and `curveCut` carry real footage (`public/media/curve-cut.mp4`); every other slot in
+`hero`, `planeCut` and `curveCut` carry real footage; every other slot in
 `src/data/media.ts` is still `placeholder: true` and shows an illustration plus a short description
 of what to record — `media.<slot>.expects` in the dictionaries, the same shot list as
 `docs/media/README.md`, which also has the ffmpeg recipe that turns a raw capture into a file small
@@ -91,7 +91,7 @@ enough to ship. To publish the real material:
 
 ## Still to do before launch
 
-- [x] First real clip: the Curve cut, in the hero and the Curve Cut section
+- [x] The hero demo, the plane cut and the curve cut clips
 - [ ] The remaining demo clips and screenshots (see `docs/media/README.md`)
 - [ ] `public/og.png` (1200×630) for link previews — the layout already emits the meta tags, add
       `<meta property="og:image">` in `src/layouts/Base.astro` when the file exists

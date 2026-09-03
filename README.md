@@ -30,18 +30,14 @@
 
 <p align="center">
   <a href="https://rafaelomodei.github.io/easySlicePrint/">
-    <img src="docs/media/curve-cut.gif" width="720" alt="Curve Cut: a curved line drawn over a carousel horse's tail, which comes off as its own printable part">
+    <img src="docs/media/demo.gif" width="720" alt="EasySlice Print demo: plane cuts across a carousel horse's legs and a curve cut over its head, built into parts and pulled apart">
   </a>
 </p>
 
 <p align="center">
-  <em><strong>Curve Cut</strong> in Quick Cut mode — draw a line over the model and the piece comes off
-  with its pin and socket already fitted (2.5&times; speed).<br>
-  <a href="https://rafaelomodei.github.io/easySlicePrint/">More clips on the website &rarr;</a></em>
+  <em>Plan the cuts, build the parts, pull them apart — the original is never touched (5&times; speed).<br>
+  <a href="https://rafaelomodei.github.io/easySlicePrint/">Watch it at full speed on the website &rarr;</a></em>
 </p>
-
-<!-- TODO(media): the full flow (Freehand cut -> Build -> Exploded View -> Export) is still to
-     record; see docs/media/README.md for the shot list. -->
 
 |  |  |
 |---|---|

@@ -8,19 +8,20 @@ and on the site — go in.
 
 | File | Shows | Where it is used |
 |---|---|---|
-| `docs/media/curve-cut.gif` | Quick Cut with the Curve tool on a carousel horse's tail, at 2.5× speed | README hero, both languages |
-| `website/public/media/curve-cut.mp4` | the same take, full length and full quality | site `hero` and `curveCut` slots |
-| `website/public/media/curve-cut-poster.jpg` | the frame at 0:48, with the tail already detached | poster for the video above |
+| `docs/media/demo.gif` | the whole flow on a carousel horse — plane cuts on the legs, a curve cut on the head, Build, exploded parts — at 5× speed | README cover, both languages |
+| `website/public/media/demo.mp4` | the same take, full length and 1600×900 so the panel stays readable | site `hero` |
+| `website/public/media/plane-cut.mp4` | a plane cut planned on a leg: cut surface, connector, Build | site `planeCut` |
+| `website/public/media/curve-cut.mp4` | Quick Cut with the Curve tool on the horse's tail | site `curveCut` |
+| `*-poster.jpg` | one frame of each video, picked where the *result* is on screen | poster for each video above |
 
 ## Still to record
 
 | File | What to capture | Notes |
 |---|---|---|
-| `demo.gif` | 10–20 s loop: draw a Freehand cut → Build → Exploded View → Export | The full flow, for the README hero and the site `hero`; keep it under ~5 MB so GitHub renders it inline |
 | `step-1-cut.png` | The viewport mid-draw, cut line/loop overlay visible | Same model and camera angle in all three shots |
 | `step-2-connectors.png` | Built parts in exploded view, pin and socket visible | |
 | `step-3-export.png` | The Export panel / the exported parts laid out | |
-| plane / freehand / build / quick / connectors clips | one short take per cut type | the remaining `placeholder: true` slots in `website/src/data/media.ts` |
+| freehand / build / quick / connectors clips | one short take each | the remaining `placeholder: true` slots in `website/src/data/media.ts` |
 
 Tips:
 
@@ -34,19 +35,23 @@ Tips:
 
 ## Turning a raw capture into the committed files
 
-A 1280×720, 54 s capture came out of the recorder at 68 MB; these three commands turn it
-into a 1.9 MB video, a 90 KB poster and a 5.2 MB GIF.
+Captures arrive at 60–90 MB — a 102 s 1080p60 MP4, or a 1280×720 GIF from a GIF recorder.
+These commands turn one into a video of a few MB, a poster and a GIF under 5 MB.
 
-The site video — full length, `controls` in `Media.astro` let the visitor follow it. The
-denoiser is there because the raw file is a GIF: its dithering is noise that H.264 would
-otherwise spend bitrate on.
+The site video — full length, `controls` in `Media.astro` let the visitor follow it. 1600×900
+is worth the extra megabyte on a screen capture: the add-on's panel is part of the demo and
+goes soft at 720p. `-an` because a screen capture's audio track is usually silence.
 
 ```sh
 ffmpeg -i media/<capture> \
-  -vf "fps=20,hqdn3d=2:1:3:3,scale=1280:-2:flags=lanczos" \
+  -vf "fps=30,scale=1600:-2:flags=lanczos" \
   -c:v libx264 -crf 27 -preset slow -pix_fmt yuv420p -movflags +faststart -an \
   website/public/media/<name>.mp4
 ```
+
+From a **GIF** capture, add `hqdn3d=2:1:3:3` to that `-vf` chain and drop to `fps=20`: the
+recorder's dithering is noise H.264 would otherwise spend bitrate on, and a GIF holds no more
+than 20 fps anyway.
 
 The poster — pick a second that shows the *result*, not the setup:
 
@@ -55,12 +60,13 @@ ffmpeg -ss 48 -i website/public/media/<name>.mp4 -frames:v 1 -q:v 4 \
   website/public/media/<name>-poster.jpg
 ```
 
-The README GIF — sped up and cut to 10 fps, 720 px and 64 colours to land under 5 MB.
-A Blender viewport is nearly greyscale, so 64 colours costs almost nothing visually:
+The README GIF — sped up and cut to 10 fps, 720 px and 64 colours to land under 5 MB. A
+Blender viewport is nearly greyscale, so 64 colours costs almost nothing visually. Pick the
+speed so the result runs 10–20 s: `PTS/5` took the 102 s demo down to 20 s.
 
 ```sh
 ffmpeg -i media/<capture> -filter_complex \
-  "setpts=0.4*PTS,fps=10,scale=720:-2:flags=lanczos,split[a][b];\
+  "setpts=PTS/5,fps=10,scale=720:-2:flags=lanczos,split[a][b];\
 [a]palettegen=max_colors=64:stats_mode=diff[p];\
 [b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
   -loop 0 docs/media/<name>.gif
@@ -68,4 +74,5 @@ ffmpeg -i media/<capture> -filter_complex \
 
 Then wire it up: `website/src/data/media.ts` for the slot (drop its `placeholder` flag) and
 `website/src/i18n/{en,pt,es}.ts` under `media.<slot>.alt` for the description. The README
-blocks are marked `TODO(media)` in `README.md` and `README.pt-BR.md`.
+cover sits right under the alpha warning in `README.md` and `README.pt-BR.md`; what is still
+missing there is marked `TODO(media)`.

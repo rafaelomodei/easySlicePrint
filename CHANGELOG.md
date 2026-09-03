@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **The full demo is on the README and the site.** A carousel horse gets plane cuts across its
+  legs and a curve cut over its head, is built into parts and pulled apart — the shot the README
+  cover and the site hero were waiting for. It replaces the curve-cut GIF as the cover, and the
+  plane-cut-with-planning clip fills the site's Plane Cut section, leaving four placeholder slots.
+
 ## [0.3.2-alpha] - 2026-09-03
 
 ### Added

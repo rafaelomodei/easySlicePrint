@@ -39,13 +39,11 @@ export interface MediaSlot extends MediaSource {
 }
 
 export const media = {
-  // The curve cut is the only footage recorded so far, so it doubles as the hero;
-  // point this at the full draw → build → export demo once that one exists.
-  hero: { kind: "video", src: "media/curve-cut.mp4", poster: "media/curve-cut-poster.jpg", aspect: "16 / 9" },
+  hero: { kind: "video", src: "media/demo.mp4", poster: "media/demo-poster.jpg", aspect: "16 / 9" },
   stepCut: { kind: "image", src: "media/placeholder-step-1.svg", placeholder: true },
   stepConnectors: { kind: "image", src: "media/placeholder-step-2.svg", placeholder: true },
   stepExport: { kind: "image", src: "media/placeholder-step-3.svg", placeholder: true },
-  planeCut: { kind: "video", src: "media/placeholder-plane.svg", placeholder: true },
+  planeCut: { kind: "video", src: "media/plane-cut.mp4", poster: "media/plane-cut-poster.jpg" },
   curveCut: { kind: "video", src: "media/curve-cut.mp4", poster: "media/curve-cut-poster.jpg" },
   freehandCut: { kind: "video", src: "media/placeholder-freehand.svg", placeholder: true },
   buildExport: { kind: "video", src: "media/placeholder-build.svg", placeholder: true },

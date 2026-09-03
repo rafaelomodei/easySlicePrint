@@ -377,7 +377,7 @@ const en = {
     badgeVideo: "Demo video coming soon",
     badgeImage: "Screenshot coming soon",
     hero: {
-      alt: "{name} demo: a curve cut drawn over a carousel horse's tail, which comes off as its own printable part",
+      alt: "{name} demo: plane cuts across a carousel horse's legs and a curve cut over its head, built into parts and pulled apart",
       expects: "20–40 s screen recording: draw a Freehand cut → Build → Exploded View → Export",
     },
     stepCut: {

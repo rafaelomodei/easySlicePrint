@@ -364,7 +364,7 @@ const es: Dict = {
     badgeVideo: "Vídeo de demostración muy pronto",
     badgeImage: "Captura de pantalla muy pronto",
     hero: {
-      alt: "Demostración de {name}: un Curve cut dibujado en la cola de un caballo de carrusel, que sale como pieza lista para imprimir",
+      alt: "Demostración de {name}: cortes de plano en las patas de un caballo de carrusel y un corte en curva en la cabeza, construidos en piezas y separados",
       expects: "Grabación de pantalla de 20–40 s: dibujar un corte Freehand → Build → Exploded View → Export",
     },
     stepCut: {

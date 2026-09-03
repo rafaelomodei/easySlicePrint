@@ -3,6 +3,8 @@
 """Plan (draft) records, preview objects and the glue between records and the
 core cut pipeline."""
 
+import math
+
 import bpy
 from bpy.app.handlers import persistent
 from mathutils import Matrix, Vector
@@ -396,6 +398,70 @@ def set_surface_points(obj, points):
     obj["esp_points"] = [c for p in points for c in p]
 
 
+def clear_of_model(context, target, points, margin):
+    """Move each point out of the model until it clears the surface by `margin`.
+
+    A freehand membrane stops exactly on its own rim - unlike a plane section or a
+    curve ribbon, it is not extended past the model - so a rim that sits on the surface
+    or a hair under it leaves a ring of material joining the two halves, and the cut
+    comes back "does not split this part in two". Measuring the finished rim against
+    the model and lifting it out is the only check that survives everything the loop
+    goes through on the way here: the stroke is pushed out along the surface normal
+    when it is drawn, but it is then smoothed, resampled down to a handful of control
+    points and splined again, and each of those pulls it back towards the material.
+    """
+    if target is None or context is None or margin <= 0.0:
+        return [Vector(p) for p in points]
+    state = ensure_evaluable(target)
+    try:
+        depsgraph = context.evaluated_depsgraph_get()
+        out = []
+        for p in points:
+            p = Vector(p)
+            # lifting a point clear of the nearest surface can drop it into a second one
+            # (a loop round a thigh has the other leg right there), so look again
+            for _ in range(3):
+                found, loc, nor, depth = mesh_utils.object_surface_depth(target, p, depsgraph)
+                if not found or depth >= margin:
+                    break
+                p = loc + nor * margin
+            out.append(p)
+        return out
+    finally:
+        restore_visibility(target, state)
+
+
+def loop_surface(context, target, points, detail, margin, passes=None):
+    """The freehand membrane, with its rim pushed clear of the model. -> (verts, faces)"""
+    boundary = surfaces.loop_boundary(points, detail)
+    boundary = clear_of_model(context, target, boundary, margin)
+    return surfaces.loop_patch(points, detail=detail, passes=passes, boundary=boundary)
+
+
+# A freehand rim has to stand clear of the model by a real distance, not a hair: where
+# the slab wall leaves the surface almost tangentially the boolean welds the two halves
+# back together, and the part comes out in one piece with the cut face already carved
+# into it. Measured against loops that do separate, the clearance that works scales with
+# the loop, at around this multiple of the Surface Margin slider.
+LOOP_MARGIN_SCALE = 2.5
+
+
+def loop_margin(context, src, points, diag):
+    """How far a freehand rim has to clear the model.
+
+    Scaled to the loop, so the same slider means the same thing on a 20 mm figure and
+    on a 200 mm one, and floored at the kerf: a rim inside the kerf is no rim at all.
+    """
+    u = mm(context)
+    radius = surfaces.polyline_length(points, closed=True) / (2.0 * math.pi)
+    return max(
+        radius * context.scene.esp.surface_margin * LOOP_MARGIN_SCALE,
+        diag * 0.002,
+        src.cut_gap_mm * u * 3.0,
+        0.6 * u,
+    )
+
+
 def rebuild_surface(obj, draft=False, context=None, target=None):
     """Regenerate the patch from its control points.
 
@@ -430,7 +496,13 @@ def rebuild_surface(obj, draft=False, context=None, target=None):
             )
             set_cutter(obj, None, None)
     elif kind == 'FREEHAND' and len(pts) >= 3:
-        verts, faces = surfaces.loop_patch(pts, detail=detail, passes=6 if draft else None)
+        # the rim is re-checked against the model on the full rebuild; a drag keeps up
+        # with the mouse instead, and the drag ends in a full rebuild anyway
+        margin = 0.0 if draft else float(obj.get("esp_margin", 0.0))
+        world = [obj.matrix_basis @ p for p in pts]
+        verts, faces = loop_surface(context, target, world, detail, margin, passes=6 if draft else None)
+        inv = obj.matrix_basis.inverted_safe()
+        verts = [inv @ Vector(v) for v in verts]
     elif kind == 'STRAIGHT':
         patch = rebuilt_section(obj, context, target)
         if patch is None:
@@ -536,6 +608,21 @@ def update_pin_mesh(obj, shape_id):
     obj.data = me
     mesh_utils.remove_mesh(old)
     obj["esp_shape"] = shape_id
+
+
+def pin_unit_mesh(pin):
+    """The connector geometry to build, taken from the preview pin itself.
+
+    Whatever the user did to the pin in edit mode - reshaped it, scaled it, added a
+    second lobe - is in this mesh and nowhere else, so the build has to read it here
+    instead of regenerating the shape from its name. Only a pin left with nothing the
+    boolean could use falls back to the stored shape.
+    """
+    if pin is None or pin.type != 'MESH' or pin.data is None:
+        return None
+    if not pin.data.polygons:
+        return None
+    return pin.data
 
 
 def flat(m):
@@ -790,6 +877,11 @@ def user_moved_pin(rec, i):
 
 
 def reset_pins(context, rec):
+    """Back to the automatic placement AND the stock shape.
+
+    The build follows the preview pin's own geometry, so a reshape in edit mode is a
+    change like a move or a scale is - and this is the way back from all three.
+    """
     global _suspend
     _suspend += 1
     try:
@@ -797,6 +889,7 @@ def reset_pins(context, rec):
             pin = bpy.data.objects.get(_contact_attr(rec, "pin", i))
             if pin is None:
                 continue
+            update_pin_mesh(pin, rec.shape)
             auto = auto_pin_matrix(context, rec, i)
             pin.matrix_world = auto
             _set_contact_attr(rec, "pin_auto", i, flat(auto))
@@ -927,7 +1020,14 @@ def record_spec(context, rec, settings, remesh=True):
         pm = pin.matrix_basis.copy() if (rec.add_pin and pin is not None) else None
         contacts.append(
             cutting.ContactSpec(
-                verts, faces, rec.add_pin, pm, shape, custom, regions_skipped=int(sobj.get("esp_skipped", 0))
+                verts,
+                faces,
+                rec.add_pin,
+                pm,
+                shape,
+                custom,
+                pin_mesh=pin_unit_mesh(pin) if pm is not None else None,
+                regions_skipped=int(sobj.get("esp_skipped", 0)),
             )
         )
     u = mm(context)
@@ -968,7 +1068,9 @@ def quick_spec(context, target, contacts):
             w, h = contact_size_bu(context, settings, inscribed)
             pm = connectors.connector_matrix(center, cutting.protrude_direction(normal, settings.pin_side), w, h)
         verts, faces = data.cutter if data.cutter is not None else (data.verts, data.faces)
-        specs.append(cutting.ContactSpec(verts, faces, settings.add_pin, pm, shape, custom, data.regions_skipped))
+        specs.append(
+            cutting.ContactSpec(verts, faces, settings.add_pin, pm, shape, custom, regions_skipped=data.regions_skipped)
+        )
     u = mm(context)
     return cutting.CutSpec(
         contacts=specs,

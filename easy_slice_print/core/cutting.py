@@ -25,6 +25,10 @@ class ContactSpec:
     pin_matrix: Matrix | None = None  # world; +Z points into the socket part
     shape: str = 'CYLINDER'
     custom_obj: object = None
+    # The connector mesh as the plan shows it (unit space, edit-mode changes included).
+    # When set it is the shape that gets built; `shape`/`custom_obj` only say how to
+    # make one from scratch, which is all Quick mode has.
+    pin_mesh: object = None
     regions_skipped: int = 0  # regions the plane crosses that this surface leaves uncut
 
 
@@ -59,6 +63,37 @@ def side_sign(point, bvh):
     if loc is None:
         return 1
     return 1 if (point - loc).dot(nor) >= 0.0 else -1
+
+
+def mesh_side(mesh, bvh, samples=600):
+    """Which side of the cut surface a separated piece came off. -> +1 or -1
+
+    One centroid test is enough for a plane cut, whose surface is flat and reaches past
+    the whole model. It is not enough for a freehand membrane: a piece's centroid can
+    sit well off the end of the membrane - a leg's centroid is half the model away from
+    a loop drawn round its thigh - and out there the nearest facet's normal says nothing
+    about which half the piece belongs to, so both halves come back on the same side and
+    a cut that worked is reported as one that did not split the part.
+
+    The vertices sitting ON the new cut face do know, and they are the ones closest to
+    the surface, so every vertex votes with a weight that falls off with its distance.
+    """
+    verts = mesh.vertices
+    n = len(verts)
+    if n == 0:
+        return 1
+    step = max(1, n // samples)
+    total = 0.0
+    for i in range(0, n, step):
+        p = verts[i].co
+        loc, nor, _idx, dist = bvh.find_nearest(p)
+        if loc is None:
+            continue
+        w = 1.0 / (dist * dist + 1e-6)
+        total += w if (p - loc).dot(nor) >= 0.0 else -w
+    if total == 0.0:
+        return side_sign(mesh_utils.mesh_centroid(mesh), bvh)
+    return 1 if total > 0.0 else -1
 
 
 def still_joined_message(spec):
@@ -179,7 +214,7 @@ def split_mesh_steps(context, mesh, spec):
         bvh = mesh_utils.bvh_from_pydata(c0.verts, c0.faces)
         side_a, side_b = [], []
         for p in orphans:
-            (side_a if side_sign(mesh_utils.mesh_centroid(p), bvh) > 0 else side_b).append(p)
+            (side_a if mesh_side(p, bvh) > 0 else side_b).append(p)
         if not side_a or not side_b:
             raise CutError(still_joined_message(spec))
         out = mesh_utils.join_meshes(side_a, "_esp_part_a"), mesh_utils.join_meshes(side_b, "_esp_part_b")
@@ -206,7 +241,7 @@ def apply_connectors_steps(context, mesh_a, mesh_b, spec):
                 continue
             n += 1
             yield f"adding connector {n}/{total}" if total > 1 else "adding the connector"
-            pin = connectors.connector_mesh(c.shape, c.custom_obj, c.pin_matrix, "_esp_pin")
+            pin = connectors.connector_mesh(c.shape, c.custom_obj, c.pin_matrix, "_esp_pin", unit_mesh=c.pin_mesh)
             socket = connectors.connector_mesh(
                 c.shape,
                 c.custom_obj,
@@ -214,6 +249,7 @@ def apply_connectors_steps(context, mesh_a, mesh_b, spec):
                 "_esp_socket",
                 radial_extra=spec.clearance,
                 tip_extra=spec.tip_extra,
+                unit_mesh=c.pin_mesh,
             )
             pin_target, socket_target = (mesh_a, mesh_b) if spec.pin_side == 'A' else (mesh_b, mesh_a)
             half = mesh_utils.boolean_mesh(context, pin_target, pin, 'UNION', spec.solver)

@@ -369,14 +369,12 @@ def membrane_fill(points, rings=None, passes=RELAX_PASSES):
     return verts, faces
 
 
-def loop_patch(points, detail=SURFACE_DETAIL, passes=None):
-    """Fill a closed loop with a smooth surface. Returns (verts, faces).
+def loop_boundary(points, detail=SURFACE_DETAIL):
+    """The splined, capped boundary a loop patch is really built on.
 
-    The loop itself is splined first, so the boundary follows the control points
-    without the corners a hand drawn stroke leaves behind, and the inside is spanned
-    by `membrane_fill`. A loop drawn from one viewpoint comes out as flat as a plane
-    cut; a loop drawn while orbiting - front, far side, back to the front - comes out
-    as a smooth saddle instead of a cone, so the printed faces still mate.
+    The control points are not the rim: they are put through a spline first, and a
+    dense loop is capped. Whoever has to answer for where the rim ends up - a freehand
+    cut has to know its rim clears the model - needs these points, not the ones drawn.
     """
     pts = [Vector(p) for p in points]
     if len(pts) < 3:
@@ -387,6 +385,24 @@ def loop_patch(points, detail=SURFACE_DETAIL, passes=None):
     if len(pts) > MAX_LOOP_SAMPLES:
         # the fill grows with the square of the boundary: keep the worst case bounded
         pts = resample_polyline(pts, MAX_LOOP_SAMPLES, closed=True)
+    return pts
+
+
+def loop_patch(points, detail=SURFACE_DETAIL, passes=None, boundary=None):
+    """Fill a closed loop with a smooth surface. Returns (verts, faces).
+
+    The loop itself is splined first, so the boundary follows the control points
+    without the corners a hand drawn stroke leaves behind, and the inside is spanned
+    by `membrane_fill`. A loop drawn from one viewpoint comes out as flat as a plane
+    cut; a loop drawn while orbiting - front, far side, back to the front - comes out
+    as a smooth saddle instead of a cone, so the printed faces still mate.
+
+    `boundary` replaces the splined rim with one the caller has already corrected -
+    see `plan.loop_surface`, which pushes it clear of the model.
+    """
+    pts = [Vector(p) for p in boundary] if boundary is not None else loop_boundary(points, detail)
+    if len(pts) < 3:
+        raise ValueError("loop needs at least 3 points")
     if passes is None:
         # a flat loop is already solved by the initial fill; a wrap-around one is not
         passes = max(8, int(round(RELAX_PASSES * min(1.0, 0.2 + loop_flatness(pts) * 4.0))))

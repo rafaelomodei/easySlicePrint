@@ -76,8 +76,11 @@ class ESP_OT_swap_pin_side(bpy.types.Operator):
 
 class ESP_OT_reset_pin(bpy.types.Operator):
     bl_idname = "esp.reset_pin"
-    bl_label = "Reset Pin Transform"
-    bl_description = "Put the connector back at the automatic position, orientation and size"
+    bl_label = "Reset Connector"
+    bl_description = (
+        "Put the connector back to its stock shape at the automatic position, orientation and size, "
+        "discarding any edit mode reshaping"
+    )
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -94,7 +97,10 @@ class ESP_OT_reset_pin(bpy.types.Operator):
 class ESP_OT_select_pin(bpy.types.Operator):
     bl_idname = "esp.select_pin"
     bl_label = "Select Connector"
-    bl_description = "Select the connector preview so you can move (G), rotate (R) or scale (S) it in the viewport"
+    bl_description = (
+        "Select the connector preview so you can move (G), rotate (R) or scale (S) it in the viewport, "
+        "or Tab into edit mode and reshape it - the build uses the shape you leave behind"
+    )
     bl_options = {'REGISTER', 'UNDO'}
     index: IntProperty(default=0)
 

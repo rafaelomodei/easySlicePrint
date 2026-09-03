@@ -313,6 +313,24 @@ def bvh_from_pydata(verts, faces):
 # ----------------------------------------------------------------------------
 # object ray helpers (C accelerated, work on the evaluated object)
 # ----------------------------------------------------------------------------
+def object_surface_depth(obj, point_w, depsgraph=None):
+    """Where `point_w` sits relative to the object's surface, in WORLD space.
+
+    -> (found, surface_point_w, outward_normal_w, signed_depth); the depth is positive
+    outside the model and negative inside it, which is what tells a cut surface whether
+    its rim actually leaves the material or is still buried in it.
+    """
+    ev = obj.evaluated_get(depsgraph) if depsgraph is not None else obj
+    mw = ev.matrix_world
+    inv = mw.inverted_safe()
+    found, loc, nor, _idx = ev.closest_point_on_mesh(inv @ Vector(point_w))
+    if not found:
+        return False, None, None, 0.0
+    loc_w = mw @ loc
+    nor_w = (mw.to_3x3().inverted_safe().transposed() @ nor).normalized()
+    return True, loc_w, nor_w, (Vector(point_w) - loc_w).dot(nor_w)
+
+
 def object_ray_cast(obj, origin_w, direction_w, depsgraph=None, max_dist=1e30):
     """Ray cast against a single object in WORLD space -> (hit, loc_w, normal_w, dist)."""
     inv = obj.matrix_world.inverted_safe()

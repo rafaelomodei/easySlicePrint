@@ -234,6 +234,7 @@ class ESP_PT_plan(ESPPanel, bpy.types.Panel):
             if rec.two_contact:
                 row.operator("esp.select_pin", text="2nd", icon='RESTRICT_SELECT_OFF').index = 1
             row.operator("esp.reset_pin", text="Reset", icon='LOOP_BACK')
+            box.label(text="Tab into the connector to reshape it; Build follows it", icon='INFO')
         if s.built:
             row = layout.row(align=True)
             row.scale_y = 1.2

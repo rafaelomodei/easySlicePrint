@@ -17,7 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import easy_slice_print  # noqa: E402
 from easy_slice_print import plan, ui  # noqa: E402
-from easy_slice_print.core import cutting, mesh_utils, surfaces  # noqa: E402
+from easy_slice_print.core import connectors, cutting, mesh_utils, surfaces  # noqa: E402
 
 FAILS = []
 
@@ -290,8 +290,6 @@ def test_freehand_connector_fits_the_loop():
 def test_printer_fit():
     """The Fit preset must decide how much wider the socket comes out than the pin."""
     print("== printer fit / clearance")
-    from easy_slice_print.core import connectors
-
     sc = reset_scene()
     base = plan.printer_clearance_mm(bpy.context)
     check(abs(base - 0.10) < 1e-9, f"printer clearance defaults to 0.10 mm (got {base})")
@@ -377,8 +375,21 @@ def test_plan_workflow():
     pin.location.x += 2.0
     rec1.size_preset = 'SMALL'
     check(abs(pin.location.x - 2.0) < 1e-3, "user offset preserved through size change")
+    # reshape the pin the way edit mode does -> the build spec has to carry that mesh
+    for v in pin.data.vertices:
+        v.co.x *= 3.0
+        v.co.y *= 3.0
+    spec = plan.record_spec(ctx, rec1, s, remesh=False)
+    check(spec.contacts[0].pin_mesh is pin.data, "the spec carries the pin's own edited mesh")
+    built = connectors.connector_mesh(
+        spec.contacts[0].shape, None, spec.contacts[0].pin_matrix, "chk", unit_mesh=spec.contacts[0].pin_mesh
+    )
+    mn, mx = mesh_utils.mesh_bounds(built)
+    check(mx.x - mn.x > pin.scale.x * 2.0, f"and builds the widened connector ({mx.x - mn.x:.2f} mm across)")
     plan.reset_pins(ctx, rec1)
     check(abs(pin.location.x) < 1e-3, "reset pin transform")
+    stock = len(pin.data.polygons) == 8 and max(v.co.x for v in pin.data.vertices) < 0.6
+    check(stock, "reset restores the stock shape")
     draw_all_panels(ctx)
     check(True, "panels draw (plan mode, with record)")
     # disable the curve cut, build

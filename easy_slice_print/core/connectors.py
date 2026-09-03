@@ -84,6 +84,19 @@ def unit_connector_bmesh(shape, custom_obj=None):
     return bm
 
 
+def unit_bmesh_from_mesh(me):
+    """Bmesh from an existing connector mesh, taken verbatim.
+
+    The preview pin carries the shape the user actually sees - every edit-mode change
+    to it included - and it already lives in unit space, so re-fitting it the way an
+    imported custom object is fitted would undo exactly those edits.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return bm
+
+
 def _normalise_unit(bm):
     """Fit arbitrary geometry into the unit connector box (xy centred, z in [-1,1])."""
     if not bm.verts:
@@ -102,22 +115,42 @@ def _normalise_unit(bm):
         v.co.z = (v.co.z - cz) / ez * 2.0
 
 
-def connector_mesh(shape, custom_obj, matrix, name, radial_extra=0.0, tip_extra=0.0):
-    """World space connector mesh. Extras (in BU) grow the shape for the socket."""
-    bm = unit_connector_bmesh(shape, custom_obj)
+def _grow_for_socket(bm, scale, radial_extra, tip_extra):
+    """Widen the unit shape so the socket clears the pin by `radial_extra` per side.
+
+    The factors come from the shape's own reach on each axis rather than from a
+    presumed 0.5 half width, so an edited connector - one scaled, stretched or grown
+    a second lobe in edit mode - still gets the gap the fit preset asked for.
+    """
+    if not bm.verts:
+        return
+    sx, sy, sz = scale
+    hx = max((abs(v.co.x) for v in bm.verts), default=0.0)
+    hy = max((abs(v.co.y) for v in bm.verts), default=0.0)
+    ztip = max((v.co.z for v in bm.verts), default=0.0)
+    fx = (sx * hx + radial_extra) / (sx * hx) if hx > 1e-9 else 1.0
+    fy = (sy * hy + radial_extra) / (sy * hy) if hy > 1e-9 else 1.0
+    fz_tip = (sz * ztip + tip_extra) / (sz * ztip) if ztip > 1e-9 else 1.0
+    for v in bm.verts:
+        v.co.x *= fx
+        v.co.y *= fy
+        if v.co.z > 0.0:
+            v.co.z *= fz_tip
+
+
+def connector_mesh(shape, custom_obj, matrix, name, radial_extra=0.0, tip_extra=0.0, unit_mesh=None):
+    """World space connector mesh. Extras (in BU) grow the shape for the socket.
+
+    `unit_mesh` is the already built unit shape to use - the preview pin's own mesh -
+    and it wins over `shape`/`custom_obj`, which only describe how to build one.
+    """
+    bm = unit_bmesh_from_mesh(unit_mesh) if unit_mesh is not None else unit_connector_bmesh(shape, custom_obj)
     sx, sy, sz = matrix.to_scale()
     sx = abs(sx) or 1e-9
     sy = abs(sy) or 1e-9
     sz = abs(sz) or 1e-9
     if radial_extra > 0.0 or tip_extra > 0.0:
-        fx = (sx + 2.0 * radial_extra) / sx
-        fy = (sy + 2.0 * radial_extra) / sy
-        fz_tip = (sz + tip_extra) / sz
-        for v in bm.verts:
-            v.co.x *= fx
-            v.co.y *= fy
-            if v.co.z > 0.0:
-                v.co.z *= fz_tip
+        _grow_for_socket(bm, (sx, sy, sz), radial_extra, tip_extra)
     bmesh.ops.transform(bm, matrix=matrix, verts=bm.verts)
     me = mesh_utils.bmesh_to_mesh(bm, name)
     bm.free()

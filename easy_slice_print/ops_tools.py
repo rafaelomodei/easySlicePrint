@@ -707,10 +707,9 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
             if (settings.mode == 'PLAN' and 0 <= settings.active_cut < len(settings.cuts))
             else settings
         )
-        u = plan.mm(context)
-        margin = max(0.6 * u, src.cut_gap_mm * u * 3.0)
         locs = [l for l, _n in self.loop]
         centroid = sum(locs, Vector((0.0, 0.0, 0.0))) / len(locs)
+        margin = plan.loop_margin(context, src, locs, self.diag)
         pts = [l + n * margin for l, n in self.loop]
         pts = surfaces.dedupe_polyline(pts, self.diag * 0.002)
         if len(pts) < 3:
@@ -722,8 +721,11 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
         n = surfaces.newell_normal(pts)
         if n.z < -1e-6 or (abs(n.z) <= 1e-6 and n.x < 0):
             pts.reverse()
+        # smoothing, resampling and the spline all pull the rim back towards the model;
+        # the membrane is built on a rim measured against the model AFTER all of them
+        pts = plan.clear_of_model(context, self.target, pts, margin)
         try:
-            verts, faces = surfaces.loop_patch(pts, detail=settings.surface_detail)
+            verts, faces = plan.loop_surface(context, self.target, pts, settings.surface_detail, margin)
         except ValueError as e:
             self.report({'WARNING'}, f"Could not fill the loop: {e}")
             self.reset_stroke()

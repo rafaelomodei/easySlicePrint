@@ -13,7 +13,11 @@ from mathutils import Matrix, Vector
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
+import easy_slice_print  # noqa: E402
+from easy_slice_print import plan  # noqa: E402
 from easy_slice_print.core import connectors, cutting, mesh_utils, section, surfaces  # noqa: E402
+
+easy_slice_print.register()  # the freehand tests read the addon's own settings
 
 FAILS = []
 
@@ -351,6 +355,231 @@ def test_custom_connector_and_remesh():
     print(f"  cut+remesh took {secs:.2f}s, faces {len(a.data.polygons)}")
     check(is_closed_manifold(a.data) and is_closed_manifold(b.data), "remeshed parts closed manifold")
     check(len(a.data.polygons) > 1000, "remesh produced dense geometry")
+
+
+def _figure_with_limbs():
+    """A body with a neck and two legs: the shape a freehand loop is drawn on."""
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.scale(bm, vec=(44.0, 16.0, 18.0), verts=bm.verts)
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges, cuts=8, use_grid_fill=True)
+    parts = [make_object("body", bm)]
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=True, segments=32, radius1=6.0, radius2=4.5, depth=30.0)
+    bmesh.ops.subdivide_edges(bm, edges=bm.edges, cuts=8, use_grid_fill=True)
+    neck = make_object("neck", bm)
+    neck.location = (17.0, 0.0, 17.0)
+    neck.rotation_euler = (0.0, math.radians(30.0), 0.0)
+    parts.append(neck)
+    for x in (-14.0, 14.0):
+        for y in (-5.0, 5.0):
+            bm = bmesh.new()
+            bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=True, segments=20, radius1=3.5, radius2=3.0, depth=34.0)
+            bmesh.ops.subdivide_edges(bm, edges=bm.edges, cuts=6, use_grid_fill=True)
+            leg = make_object(f"leg{x:.0f}_{y:.0f}", bm)
+            leg.location = (x, y, -22.0)
+            parts.append(leg)
+    bpy.context.view_layer.update()
+    me = mesh_utils.world_mesh_copy(bpy.context, parts[0], "w")
+    for extra in parts[1:]:
+        me = mesh_utils.boolean_mesh(
+            bpy.context, me, mesh_utils.world_mesh_copy(bpy.context, extra, "e"), 'UNION', 'EXACT'
+        )
+    mesh_utils.cleanup_temp(bpy.context.scene)
+    for o in parts:
+        mesh_utils.remove_object(o)
+    obj = bpy.data.objects.new("Fig", me)
+    bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.update()
+    return obj
+
+
+def _traced_loop(obj, centre, axis, radius, samples=100, wobble=0.05):
+    """The samples a freehand stroke records tracing a ring round a limb."""
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    diag = mesh_utils.object_world_diagonal(obj)
+    u, v = surfaces.plane_basis(Vector(axis))
+    out = []
+    for k in range(samples):
+        a = 2.0 * math.pi * k / samples
+        d = u * math.cos(a) + v * math.sin(a)
+        aim = Vector(centre) + Vector(axis).normalized() * (radius * wobble * math.sin(a * 3.0)) + d * radius
+        hit, loc, nor, _i = mesh_utils.object_ray_cast(obj, aim + d * diag, -d, depsgraph, max_dist=diag * 4.0)
+        if hit:
+            out.append((loc, nor.normalized()))
+    return out
+
+
+def _freehand_patch(obj, loop, margin, smoothing=0.35, control_points=20, detail=3, clear=True):
+    """The membrane `close_loop` builds from a recorded stroke."""
+    diag = mesh_utils.object_world_diagonal(obj)
+    pts = [loc + nor * margin for loc, nor in loop]
+    pts = surfaces.dedupe_polyline(pts, diag * 0.002)
+    pts = surfaces.smooth_polyline(pts, smoothing, closed=True)
+    pts = surfaces.resample_polyline(pts, control_points, closed=True)
+    n = surfaces.newell_normal(pts)
+    if n.z < -1e-6 or (abs(n.z) <= 1e-6 and n.x < 0):
+        pts.reverse()
+    rim = len(surfaces.loop_boundary(pts, detail))
+    if not clear:
+        verts, faces = surfaces.loop_patch(pts, detail=detail)
+        return verts, faces, rim
+    pts = plan.clear_of_model(bpy.context, obj, pts, margin)
+    verts, faces = plan.loop_surface(bpy.context, obj, pts, detail, margin)
+    return verts, faces, rim
+
+
+def _rim_depth(obj, verts, count):
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    out = []
+    for p in verts[:count]:
+        found, _loc, _nor, depth = mesh_utils.object_surface_depth(obj, p, depsgraph)
+        if found:
+            out.append(depth)
+    return min(out) if out else 0.0
+
+
+def test_freehand_loop_really_leaves_the_model():
+    """A freehand membrane only cuts if its rim stands clear of the model.
+
+    Unlike a plane section or a curve ribbon, the membrane stops on its own rim, so the
+    single thing separating the two halves is how far that rim reaches past the surface.
+    The stroke is pushed out along the surface normal when it is drawn - and then
+    smoothed, resampled down to a handful of control points and splined, each of which
+    drags it back towards the material. Measuring the finished rim is the only check
+    that survives all three.
+    """
+    print("== a freehand loop's rim has to leave the model")
+    reset_scene()
+    fig = _figure_with_limbs()
+    diag = mesh_utils.object_world_diagonal(fig)
+    loop = _traced_loop(fig, Vector((0.0, 0.0, 0.0)), Vector((1.0, 0.0, 0.0)), 14.0)
+    check(len(loop) > 80, f"the stroke recorded a full ring ({len(loop)} samples)")
+
+    # what the loop used to get: a fixed 0.6 mm push applied BEFORE the smoothing
+    verts, faces, rim = _freehand_patch(fig, loop, 0.6, clear=False)
+    sunk = _rim_depth(fig, verts, rim)
+    check(sunk < 0.2, f"the old fixed push does not survive the pipeline (rim at {sunk:+.2f} mm)")
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2)
+    failed = False
+    try:
+        cutting.perform_cut(bpy.context, fig, spec, ("A", "B"), out_collection("old"))
+    except cutting.CutError:
+        failed = True
+    check(failed, "and a rim sitting on the surface leaves the part in one piece")
+
+    reset_scene()
+    fig = _figure_with_limbs()
+    settings = bpy.context.scene.esp
+    loop = _traced_loop(fig, Vector((0.0, 0.0, 0.0)), Vector((1.0, 0.0, 0.0)), 14.0)
+    margin = plan.loop_margin(bpy.context, settings, [loc for loc, _n in loop], diag)
+    check(margin > 1.0, f"the margin is scaled to the loop, not a fixed hair ({margin:.2f} mm)")
+    verts, faces, rim = _freehand_patch(fig, loop, margin)
+    clear = _rim_depth(fig, verts, rim)
+    check(clear > margin * 0.5, f"the corrected rim really stands outside the model ({clear:+.2f} mm)")
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2)
+    a, b, _s = cutting.perform_cut(bpy.context, fig, spec, ("A", "B"), out_collection("new"))
+    check(is_closed_manifold(a.data) and is_closed_manifold(b.data), "and the cut splits it into two solids")
+    check(len(a.data.polygons) > 100 and len(b.data.polygons) > 100, "both halves carry real geometry")
+
+
+def test_a_split_that_worked_is_not_reported_as_a_failure():
+    """Which half a piece came off is decided by the geometry on the cut face.
+
+    A freehand membrane is small and local, so a separated piece's centroid can sit far
+    off the end of it - a leg's centroid is half the model away from a loop drawn round
+    its thigh - and out there the nearest facet's normal means nothing. Classifying by
+    the centroid put every piece on one side and reported a cut that had worked as one
+    that never split the part.
+    """
+    print("== a cut that did separate is not reported as a failure")
+    reset_scene()
+    fig = _figure_with_limbs()
+    diag = mesh_utils.object_world_diagonal(fig)
+    # a loop drawn slanted across one thigh, so the membrane is small, tilted and sits
+    # a long way from the centroid of everything it cuts off
+    axis = Vector((0.3, 0.2, 0.93))
+    loop = _traced_loop(fig, Vector((-14.0, -5.0, -20.0)), axis, 6.0)
+    settings = bpy.context.scene.esp
+    margin = plan.loop_margin(bpy.context, settings, [loc for loc, _n in loop], diag)
+    verts, faces, _rim = _freehand_patch(fig, loop, margin)
+    bvh = mesh_utils.bvh_from_pydata(verts, faces)
+    mesh = mesh_utils.world_mesh_copy(bpy.context, fig, "_w")
+    slab_bm = surfaces.slab_from_patch(verts, faces, 0.2)
+    slab = mesh_utils.bmesh_to_mesh(slab_bm, "_slab")
+    slab_bm.free()
+    work = mesh_utils.boolean_mesh(bpy.context, mesh, slab, 'DIFFERENCE', 'AUTO')
+    mesh_utils.remove_mesh(slab)
+    pieces = mesh_utils.separate_loose_meshes(bpy.context, work)
+    check(len(pieces) > 1, f"the boolean did separate the model ({len(pieces)} pieces)")
+    centroids = [cutting.side_sign(mesh_utils.mesh_centroid(p), bvh) for p in pieces]
+    check(
+        not (any(v > 0 for v in centroids) and any(v < 0 for v in centroids)),
+        f"the centroid test alone put every piece on one side ({centroids})",
+    )
+    votes = [cutting.mesh_side(p, bvh) for p in pieces]
+    check(any(v > 0 for v in votes) and any(v < 0 for v in votes), f"and both sides are found ({votes})")
+    big = max(pieces, key=lambda m: len(m.polygons))
+    small = min(pieces, key=lambda m: len(m.polygons))
+    check(
+        cutting.mesh_side(big, bvh) != cutting.mesh_side(small, bvh),
+        "the offcut and the rest of the model land on opposite sides",
+    )
+    for p in pieces:
+        mesh_utils.remove_mesh(p)
+
+
+def test_edited_connector_is_the_one_built():
+    """A connector reshaped in edit mode has to reach the boolean, not its template.
+
+    The plan stores the shape by name, so a build that rebuilds from the name throws
+    away everything the user did to the preview pin. The pin object's own mesh is the
+    only record of that work, so the spec carries the mesh itself.
+    """
+    print("== an edited connector is the connector that gets built")
+    reset_scene()
+
+    # the preview pin as the plan makes it, then edited: twice as wide, half as tall
+    bm = connectors.unit_connector_bmesh('CYLINDER')
+    for v in bm.verts:
+        v.co.x *= 2.0
+        v.co.y *= 2.0
+        v.co.z *= 0.5
+    edited = mesh_utils.bmesh_to_mesh(bm, "ESP_Pin_edited")
+    bm.free()
+
+    pm = connectors.connector_matrix(Vector((0, 0, 0)), Vector((0, 0, -1)), 6.0, 8.0)
+    plain = connectors.connector_mesh('CYLINDER', None, pm, "plain")
+    mn, mx = mesh_utils.mesh_bounds(plain)
+    check(abs((mx.x - mn.x) - 6.0) < 0.1, f"the template pin is 6 mm across ({mx.x - mn.x:.2f})")
+
+    grown = connectors.connector_mesh('CYLINDER', None, pm, "grown", unit_mesh=edited)
+    mn, mx = mesh_utils.mesh_bounds(grown)
+    check(abs((mx.x - mn.x) - 12.0) < 0.1, f"the edited pin is 12 mm across ({mx.x - mn.x:.2f})")
+    check(abs((mx.z - mn.z) - 8.0) < 0.1, f"and 8 mm tall, half of the template's 16 ({mx.z - mn.z:.2f})")
+
+    # the socket clears the edited shape by the clearance, not by the template's
+    socket = connectors.connector_mesh('CYLINDER', None, pm, "socket", radial_extra=0.5, unit_mesh=edited)
+    smn, smx = mesh_utils.mesh_bounds(socket)
+    check(abs((smx.x - mn.x - (mx.x - mn.x)) - 0.5) < 0.05, f"socket clears by 0.5 mm per side ({smx.x - mx.x:.3f})")
+
+    # and the whole build honours it: the pin sticking out of part A is the wide one
+    obj = make_cylinder()
+    verts, faces = surfaces.plane_patch(Vector((0, 0, 0)), Vector((0, 0, 1)), Vector((1, 0, 0)), 60)
+    spec = cutting.CutSpec(
+        contacts=[cutting.ContactSpec(verts, faces, True, pm, 'CYLINDER', None, pin_mesh=edited)],
+        gap=0.2,
+        clearance=0.1,
+        pin_side='A',
+    )
+    out = out_collection("out")
+    a, b, _secs = cutting.perform_cut(bpy.context, obj, spec, ("A", "B"), out)
+    check(is_closed_manifold(a.data) and is_closed_manifold(b.data), "both parts closed manifold")
+    mn_a, _mx_a = mesh_utils.mesh_bounds(a.data)
+    check(abs(mn_a.z - -4.0) < 0.1, f"the pin on A is the edited 4 mm protrusion ({mn_a.z:.2f}, not -8)")
+    # the socket in B is as wide as the edited pin: measure the hole at the cut face
+    ring = [v.co for v in b.data.vertices if v.co.z > -0.3 and abs(v.co.x) < 9.0 and abs(v.co.y) < 1.0]
+    check(ring and max(abs(v.x) for v in ring) > 5.5, "B was hollowed out to the edited pin's 12 mm width")
 
 
 def test_stepped_cut():
@@ -695,6 +924,9 @@ if __name__ == "__main__":
     test_smooth_surfaces()
     test_two_contacts()
     test_custom_connector_and_remesh()
+    test_freehand_loop_really_leaves_the_model()
+    test_a_split_that_worked_is_not_reported_as_a_failure()
+    test_edited_connector_is_the_one_built()
     test_stepped_cut()
     test_cross_section()
     test_section_cut_leaves_the_other_leg()

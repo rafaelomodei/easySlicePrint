@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.3-alpha] - 2026-09-03
+
 ### Added
 - **The full demo is on the README and the site.** A carousel horse gets plane cuts across its
   legs and a curve cut over its head, is built into parts and pulled apart — the shot the README
@@ -13,6 +15,34 @@ All notable changes to this project are documented here. The format follows
   plane-cut-with-planning clip fills the site's Plane Cut section, leaving four placeholder slots.
 
 ### Fixed
+- **A Freehand cut kept failing to separate the part.** The loop's membrane stops on its own
+  rim — unlike a plane section or a curve ribbon, nothing extends it past the model — so the one
+  thing that lets it cut clean through is how far that rim reaches outside the surface. The stroke
+  was pushed out by a fixed 0.6 mm when it was drawn and then smoothed, resampled down to a handful
+  of control points and splined, and all three drag it back into the material; whatever was left of
+  the push was often nothing at all. The rim is now measured against the model *after* all of that
+  and lifted until it really clears it, and the clearance scales with the loop instead of being a
+  fixed hair, so the same setting means the same thing on a 20 mm figure and a 200 mm one. Surface
+  Margin drives it: the slider that says to raise it when a cut fails to separate was read by Curve
+  cuts only and silently ignored by Freehand ones, which is why moving it changed nothing. Across a
+  sweep of 56 traced loops on a figure with a neck, a body and four legs, 29 failed to separate
+  before and none do now. An existing loop picks the fix up when you open Edit Cut Surface on it.
+- **A cut that did separate the part could still be reported as a failure.** Which half a piece came
+  off was decided from its centroid, and a freehand membrane is small and local: a leg's centroid
+  sits half the model away from a loop drawn round its thigh, where the nearest facet's normal says
+  nothing about which side it is on. Every piece landed on the same side and a cut that had worked
+  came back as "the cut surface does not split this part in two". The side is now decided by the
+  geometry on the new cut face, where the answer is unambiguous, with every vertex voting by
+  distance. That accounts for 9 of the 29 failures above on its own.
+- **A connector reshaped in edit mode was ignored by Build.** The plan stored the connector by
+  the name of its shape and the build rebuilt a stock one from that name, so every change made to
+  the preview pin in edit mode — widened, stretched, tapered by hand, given a second lobe — was
+  thrown away and the part came out with the default cylinder. The build now takes the geometry
+  from the preview pin itself, per contact, so the pin and its socket are the shape on screen.
+  The socket's clearance is measured from that shape's own reach as well, so an edited connector
+  still gets exactly the gap the Fit preset asks for; a side effect is that the Tapered connector
+  finally gets a uniform gap instead of a fifth more at its base. Reset now puts the stock shape
+  back along with the automatic position and size.
 - **The Download link pointed at 0.2.3.** Every alpha was published with GitHub's pre-release
   flag, and GitHub gives the "Latest" badge — and `/releases/latest`, which both READMEs and the
   website link to — only to a release without it, so the repository advertised the last non-alpha
@@ -222,7 +252,8 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.2-alpha...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.3-alpha...HEAD
+[0.3.3-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.2-alpha...v0.3.3-alpha
 [0.3.2-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.1-alpha...v0.3.2-alpha
 [0.3.1-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.3...v0.3.1-alpha
 [0.2.3]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.2...v0.2.3

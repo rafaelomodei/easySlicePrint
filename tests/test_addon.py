@@ -338,8 +338,8 @@ def test_version():
 
     with open(os.path.join(ROOT, "easy_slice_print", "blender_manifest.toml"), "rb") as fh:
         manifest = tomllib.load(fh)
-    check(ver.VERSION == manifest["version"], f"version {ver.VERSION} == manifest {manifest['version']}")
-    check(ui.VERSION == manifest["version"], "the panel reads the manifest version")
+    check(manifest["version"] == ver.VERSION, f"version {ver.VERSION} == manifest {manifest['version']}")
+    check(manifest["version"] == ui.VERSION, "the panel reads the manifest version")
     check(ver.STAGE in ("", "alpha", "beta"), f"stage {ver.STAGE!r}")
 
 

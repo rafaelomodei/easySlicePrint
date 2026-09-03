@@ -12,6 +12,13 @@ All notable changes to this project are documented here. The format follows
   cover and the site hero were waiting for. It replaces the curve-cut GIF as the cover, and the
   plane-cut-with-planning clip fills the site's Plane Cut section, leaving four placeholder slots.
 
+### Fixed
+- **The Download link pointed at 0.2.3.** Every alpha was published with GitHub's pre-release
+  flag, and GitHub gives the "Latest" badge — and `/releases/latest`, which both READMEs and the
+  website link to — only to a release without it, so the repository advertised the last non-alpha
+  tag. 0.3.2-alpha is now the latest release and the workflow stops setting the flag; the alpha
+  warning was never carried by it, but by the release notes, the version string and the panel.
+
 ## [0.3.2-alpha] - 2026-09-03
 
 ### Added

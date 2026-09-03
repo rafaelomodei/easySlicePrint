@@ -49,4 +49,9 @@ jobs:
           files: dist/*.zip
           body_path: RELEASE_NOTES.md
           generate_release_notes: true
-          prerelease: true   # alpha: flag every release as a pre-release until 1.0
+          # Not flagged as a pre-release. GitHub gives the "Latest" badge - and
+          # /releases/latest, which the READMEs' Download link and the site both point at -
+          # only to a release without that flag, so flagging every alpha kept sending people
+          # to v0.2.3, the last non-alpha tag. The alpha warning is in the release notes, the
+          # version string and the add-on's own panel; it does not need this flag too.
+          make_latest: true

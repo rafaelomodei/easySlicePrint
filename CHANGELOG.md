@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.2-alpha] - 2026-09-03
+
 ### Added
 - **First real demo footage.** A Curve cut in Quick Cut mode — a line drawn over a carousel horse's
   tail, which comes off as its own printable part, connector included — now opens both READMEs as a
@@ -207,7 +209,8 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.1-alpha...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.2-alpha...HEAD
+[0.3.2-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.1-alpha...v0.3.2-alpha
 [0.3.1-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.3...v0.3.1-alpha
 [0.2.3]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.1...v0.2.2

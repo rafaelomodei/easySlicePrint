@@ -209,6 +209,21 @@ def straight_section(context, target, plane_co, plane_no, span=None, reference=N
     return section.SectionResult(grown_v, grown_f, islands=res.islands, kept=res.kept, cutter=res.cutter)
 
 
+def fill_straight_contact(data, patch, span):
+    """Put a section into a contact: the face the user sees *and* the quad the boolean gets.
+
+    Both travel on the same `SectionResult`, and they are not interchangeable. Copying
+    only the first leaves the boolean subtracting the section itself, whose rim lies on
+    the model tangentially - the exact solver returns the mesh nearly untouched, so the
+    cut reports success, names two parts and separates nothing.
+    """
+    data.verts, data.faces = patch
+    data.cutter = patch.cutter
+    data.span = span
+    data.is_cut_face = True
+    data.regions_skipped = patch.islands - patch.kept
+
+
 # ----------------------------------------------------------------------------
 # cut surfaces that follow the model (curve cuts)
 # ----------------------------------------------------------------------------

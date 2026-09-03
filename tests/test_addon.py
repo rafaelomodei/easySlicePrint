@@ -165,10 +165,7 @@ def test_plane_section_preview():
     patch = plan.straight_section(bpy.context, legs, Vector((0, 0, 5)), Vector((0, 0, 1)), span, ref)
     check(patch is not None, "the plane sections the model")
     d = plan.ContactData('STRAIGHT')
-    d.verts, d.faces = patch
-    d.cutter = patch.cutter
-    d.span = span
-    d.is_cut_face = True
+    plan.fill_straight_contact(d, patch, span)
     d.view_dir = Vector((-1, 0, 0))
     d.plane_co = Vector((0, 0, 5))
     d.plane_no = Vector((0, 0, 1))
@@ -497,6 +494,82 @@ def test_quick_mode():
     check(bpy.data.objects.get("Quick2") is None, "original deleted when Keep Original is off")
 
 
+class FakeStroke:
+    """Enough of the Plane tool for `make_contact` to run without a 3D viewport.
+
+    Screen x maps straight to world x on the cut plane and the view looks down -Y, so a
+    drag from x0 to x1 is a horizontal plane cut across that stretch of the model.
+    """
+
+    def __init__(self, target, plane_z, hit):
+        self.target = target
+        self.plane_z = plane_z
+        self.bcenter = Vector((0.0, 0.0, plane_z))
+        self.contact_hit = hit
+        self.data = None
+
+    def at_depth(self, p, _center):
+        return Vector((p[0], 0.0, self.plane_z))
+
+    def view_dir(self, _p):
+        return Vector((0.0, -1.0, 0.0))
+
+    def cast(self, _context, _p):
+        return True, self.contact_hit, Vector((0.0, 0.0, 1.0)), 0.0
+
+    def view_moved(self):
+        return False
+
+    def reset_stroke(self):
+        self.data = None
+
+    def contact_done(self, _context, data):
+        self.data = data  # keep it instead of cutting, so the contact can be inspected
+        return {'FINISHED'}
+
+
+def test_quick_plane_section():
+    """The Plane tool puts the section's quad on the contact, so Quick mode cuts.
+
+    The tool used to copy the section into the contact and drop the quad that came with
+    it. Quick mode reads the quad straight off the contact, so it booleaned the cross
+    section itself: its rim lies on the model tangentially, the exact solver hands back
+    a mesh barely touched, and the cut reports success, names two parts and separates
+    nothing. Plan mode was spared because it re-sections on the preview and picks the
+    quad up there.
+    """
+    print("== the plane tool hands the boolean a quad, not the raw section")
+    sc = reset_scene()
+    legs = make_two_legs()
+    sc.esp.mode = 'QUICK'
+    sc.esp.size_preset = 'MEDIUM'
+
+    from easy_slice_print.ops_tools import ESP_OT_cut_straight, quick_cut
+
+    # drag across the leg at x=-30 only, at z=5
+    tool = FakeStroke(legs, 5.0, Vector((-20.0, 0.0, 5.0)))
+    ESP_OT_cut_straight.make_contact(tool, bpy.context, (-45.0, 0.0), (-15.0, 0.0))
+    d = tool.data
+    check(d is not None, "the stroke produced a contact")
+    check(d.is_cut_face, "the surface is the model's own cut face")
+    check(len(d.verts) > 8, f"the section is an outline, not a quad ({len(d.verts)} verts)")
+    check(d.cutter is not None, "the contact carries the section's cutter")
+
+    spec = plan.quick_spec(bpy.context, legs, [d])
+    cverts = spec.contacts[0].verts
+    check(len(cverts) == 4, f"and the boolean is handed that quad ({len(cverts)} verts)")
+    check(max(v.x for v in cverts) < 5.0, "which stops in the gap before the other leg")
+
+    a, b, _secs = quick_cut(bpy.context, legs, [d])
+    lower = a if a.name.endswith("LOWER") else b
+    # the leg the stroke missed goes into one of the parts whole, so only the cut leg
+    # says anything about the cut: its half has to stop at the plane, pin aside
+    mw = lower.matrix_world
+    cut_leg = [(mw @ v.co).z for v in lower.data.vertices if (mw @ v.co).x < -10.0]
+    check(bool(cut_leg), "the lower part kept the cut leg")
+    check(max(cut_leg) < 8.0, f"and it came apart at the plane (its leg tops out at {max(cut_leg):.1f})")
+
+
 def test_unregister():
     print("== unregister")
     easy_slice_print.unregister()
@@ -509,6 +582,7 @@ if __name__ == "__main__":
     test_plan_workflow()
     test_cut_after_approve()
     test_quick_mode()
+    test_quick_plane_section()
     test_printer_fit()
     test_curve_cut_stops_at_the_model()
     test_freehand_connector_fits_the_loop()

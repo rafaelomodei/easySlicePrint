@@ -13,6 +13,15 @@ All notable changes to this project are documented here. The format follows
   git (`/media/` is ignored); `docs/media/README.md` lists what is still to record and the ffmpeg
   recipe that derives the committed files from a capture.
 
+### Fixed
+- **Quick Cut with the Plane tool left the model uncut.** On anything but a simple shape the cut
+  ran its full time, named two parts and created the backup, but the model came out whole — the
+  horse it was reported on kept all 306k of its vertices in one part. The tool copied the model's
+  cross section into the cut and dropped the quad that came with it, so the boolean subtracted the
+  section itself; its rim lies on the surface tangentially and the exact solver returns the mesh
+  barely touched. A cube still worked, which is why it survived 0.3.1-alpha. Plan Mode was never
+  affected: it re-sections on the preview and picks the quad up there.
+
 ## [0.3.1-alpha] - 2026-09-03
 
 ### Added

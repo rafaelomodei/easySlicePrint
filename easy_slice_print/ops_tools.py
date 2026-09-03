@@ -464,17 +464,14 @@ class ESP_OT_cut_straight(CutToolBase, bpy.types.Operator):
         span = (u.normalized(), -half, half)
         patch = plan.straight_section(context, self.target, c, n, span, loc if hit else c)
         if patch is not None:
-            data.span = span
-            data.is_cut_face = True
-            data.regions_skipped = patch.islands - patch.kept
+            plan.fill_straight_contact(data, patch, span)
         else:
             # nothing to section (open or non manifold mesh): fall back to the old
             # rectangle around the stroke rather than leaving the user without a cut
             margin = self.surface_margin(context, u.length)
             depth_axis = n.cross(u.normalized()).normalized()
             depth = self.model_span(context, sample_segment(p0, p1, 17), c, depth_axis) or self.bbox_span(c, depth_axis)
-            patch = surfaces.rect_patch(c, n, u, half + margin, (depth[0] - margin, depth[1] + margin))
-        data.verts, data.faces = patch
+            data.verts, data.faces = surfaces.rect_patch(c, n, u, half + margin, (depth[0] - margin, depth[1] + margin))
         return self.contact_done(context, data)
 
     def draw(self, context):

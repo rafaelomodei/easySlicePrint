@@ -6,12 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1-alpha] - 2026-09-03
+
 ### Added
 - **The project is labelled alpha.** README, website, docs and the sidebar panel now say the
   add-on is under active development: bugs are expected, and the UI and plan data still change
   between releases.
 
 ### Fixed
+- **Cutting an approved part cut the original model again.** After Approve, drawing a new cut on
+  one of the finished parts and building rebuilt from the model as it was before *any* cut: every
+  approved cut was thrown away and the plan sliced the untouched original. A part remembers the
+  model it came from, and the plan was rooted at that memory instead of at the part under the
+  cursor. The object you draw on is now the plan's source, so a second round of cuts starts from
+  the geometry you already have. A plan can also carry cuts on several parts at once: each part a
+  cut was drawn on is built from itself, its pieces are named after it (`Part_001_PART_001`), and
+  Back to Plan brings all of them back.
 - **The sidebar showed the wrong version.** The panel had `0.1.0` hard-coded while the extension
   shipped as 0.2.3. The version is now read from `blender_manifest.toml` at runtime, so what the
   panel shows is always the version Blender installed; a test keeps the two in step.
@@ -181,7 +191,8 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.1-alpha...HEAD
+[0.3.1-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.3...v0.3.1-alpha
 [0.2.3]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.0...v0.2.1

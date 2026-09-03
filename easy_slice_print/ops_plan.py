@@ -421,10 +421,13 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
             raise cutting.CutError("The plan's source object no longer exists. Clear the plan.")
         if s.built:
             _remove_built_parts(context)
-        plan.restore_from_backup(scene, base)
+        # after an approve the cuts can sit on different parts: each one is a source
+        sources = plan.plan_sources(context)
+        for src in sources:
+            plan.restore_from_backup(scene, src)
         plan.set_plan_hidden(context, False)
         col = plan.built_collection(scene, base.name)
-        parts = [base]
+        parts = list(sources)
         made = []
         counter = 0
         done = 0
@@ -437,8 +440,9 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
             try:
                 spec = plan.record_spec(context, rec, s)
                 target = _pick_target(parts, Vector(rec.anchor))
+                stem = target.get("esp_stem", target.name)
                 counter += 2
-                names = (f"{base.name}_PART_{counter - 1:03d}", f"{base.name}_PART_{counter:03d}")
+                names = (f"{stem}_PART_{counter - 1:03d}", f"{stem}_PART_{counter:03d}")
                 state = plan.ensure_evaluable(target)
                 try:
                     a, b, _secs = yield from _labelled(
@@ -456,9 +460,11 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
                 bpy.data.collections.remove(col)
                 raise cutting.CutError(f"'{rec.name}' failed: {e}") from e
             parts.remove(target)
-            if target is not base:
+            if target not in sources:
                 made.remove(target)
                 mesh_utils.remove_object(target)
+            for o in (a, b):
+                o["esp_stem"] = stem
             parts.extend((a, b))
             made.extend((a, b))
             rec.built = True
@@ -467,11 +473,18 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
             bpy.data.collections.remove(col)
             raise cutting.CutError("Nothing was cut")
         yield "finishing"
-        for i, o in enumerate(sorted(made, key=lambda o: o.name), start=1):
-            o.name = f"{base.name}_PART_{i:03d}"
+        numbers = {}
+        for o in sorted(made, key=lambda o: o.name):
+            stem = o.get("esp_stem", base.name)
+            n = numbers[stem] = numbers.get(stem, 0) + 1
+            o.name = f"{stem}_PART_{n:03d}"
             o.data.name = o.name
-            o["esp_base"] = base.name
-        plan.move_to_backup(scene, base)
+            o["esp_base"] = stem
+            if "esp_stem" in o:
+                del o["esp_stem"]
+        for src in sources:
+            if src not in parts:  # it was cut: the model itself goes out of the way
+                plan.move_to_backup(scene, src)
         plan.set_plan_hidden(context, True)
         s.built = True
         s.built_collection = col.name
@@ -541,10 +554,11 @@ class ESP_OT_return_to_plan(bpy.types.Operator):
     def execute(self, context):
         s = context.scene.esp
         _remove_built_parts(context)
-        base = bpy.data.objects.get(s.base_object)
-        if base is not None:
-            plan.restore_from_backup(context.scene, base)
-            context.view_layer.objects.active = base
+        sources = plan.plan_sources(context)
+        for src in sources:
+            plan.restore_from_backup(context.scene, src)
+        if sources:
+            context.view_layer.objects.active = sources[0]
         plan.set_plan_hidden(context, False)
         s.last_message = "Plan restored"
         self.report({'INFO'}, "Plan restored: cuts are editable again")
@@ -565,10 +579,12 @@ class ESP_OT_approve(bpy.types.Operator):
 
     def execute(self, context):
         s = context.scene.esp
-        base = bpy.data.objects.get(s.base_object)
+        # only what this build actually consumed - a source it cut is in the backup
+        consumed = [o for o in plan.plan_sources(context) if o.get("esp_backup_home") is not None]
         plan.remove_all_records(context)
-        if base is not None and not s.keep_original:
-            mesh_utils.remove_object(base)
+        if not s.keep_original:
+            for o in consumed:
+                mesh_utils.remove_object(o)
         s.built = False
         s.base_object = ""
         s.built_collection = ""
@@ -592,11 +608,11 @@ class ESP_OT_clear_plan(bpy.types.Operator):
 
     def execute(self, context):
         s = context.scene.esp
+        stashed = [o for o in plan.plan_sources(context) if o.get("esp_backup_home") is not None]
         plan.remove_all_records(context)
         if not s.built:
-            base = bpy.data.objects.get(s.base_object)
-            if base is not None and base.get("esp_backup_home") is not None:
-                plan.restore_from_backup(context.scene, base)
+            for o in stashed:
+                plan.restore_from_backup(context.scene, o)
             s.base_object = ""
         s.built = False
         s.built_collection = ""

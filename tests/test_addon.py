@@ -438,6 +438,40 @@ def test_plan_workflow():
     draw_all_panels(ctx)
 
 
+def test_cut_after_approve():
+    """A cut drawn on an approved part cuts that part, not the model it came from."""
+    print("== cutting an approved part")
+    sc = reset_scene()
+    obj = make_cylinder("Chain")  # z from -30 to 30
+    s = sc.esp
+    s.mode = 'PLAN'
+    s.keep_original = True
+    diag = mesh_utils.object_world_diagonal(obj)
+    ctx = bpy.context
+    plan.add_record(ctx, obj, 'STRAIGHT', [plane_contact(-10.0, diag)])
+    bpy.ops.esp.build()
+    bpy.ops.esp.approve()
+    parts = sorted(bpy.data.collections["ESP_Built_Chain"].objects, key=lambda o: world_bounds(o)[0].z)
+    check(len(parts) == 2 and obj.hide_get(), "approved 2 parts, original stashed")
+    upper = parts[1]  # -10 .. 30
+    ctx.view_layer.objects.active = upper
+    plan.add_record(ctx, upper, 'STRAIGHT', [plane_contact(10.0, diag)])
+    check(s.base_object == upper.name, f"plan rooted at the approved part ({s.base_object})")
+    res = bpy.ops.esp.build()
+    col = bpy.data.collections.get(s.built_collection)
+    check(res == {'FINISHED'} and col is not None and len(col.objects) == 2, "second build made 2 parts")
+    # the part starts at z=-10 and its connector hangs a little below that; the whole
+    # model would reach z=-30, so a bottom near -30 means the original got cut instead
+    low = min(world_bounds(o)[0].z for o in col.objects)
+    check(low > -25.0, f"cut the approved part, not the whole model (lowest z {low:.1f})")
+    check(upper.hide_get(), "the cut part went to the backup")
+    check(bpy.data.objects.get("Chain") is not None, "the original is untouched")
+    check(bpy.data.objects.get(parts[0].name) is not None, "the other approved part survived")
+    draw_all_panels(ctx)
+    res = bpy.ops.esp.return_to_plan()
+    check(res == {'FINISHED'} and not upper.hide_get(), "back to plan restored the approved part")
+
+
 def test_quick_mode():
     print("== quick mode")
     sc = reset_scene()
@@ -473,6 +507,7 @@ if __name__ == "__main__":
     test_version()
     test_register()
     test_plan_workflow()
+    test_cut_after_approve()
     test_quick_mode()
     test_printer_fit()
     test_curve_cut_stops_at_the_model()

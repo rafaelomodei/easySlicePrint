@@ -103,6 +103,12 @@ def move_to_backup(scene, obj):
 def restore_from_backup(scene, obj):
     homes = list(obj.get("esp_backup_home", []))
     bc = bpy.data.collections.get(BACKUP_COLLECTION)
+    if not homes and (bc is None or obj.name not in bc.objects):
+        # never stashed (an approved part, say): leave its collections alone
+        obj.hide_set(False)
+        obj.hide_viewport = False
+        obj.hide_render = False
+        return
     if bc is not None and obj.name in bc.objects:
         bc.objects.unlink(obj)
     linked = False
@@ -145,6 +151,27 @@ def resolve_target(context):
     if base is not None and base.type == 'MESH':
         return base
     return None
+
+
+def plan_sources(context):
+    """Every live model the plan cuts into, the base first.
+
+    Usually that is just the base. Once a build is approved the plan is empty and
+    new cuts land on the parts themselves, so each part a record was drawn on is a
+    source of its own and the next build must cut *it*, not the untouched original.
+    """
+    settings = context.scene.esp
+    out = []
+    base = bpy.data.objects.get(settings.base_object) if settings.base_object else None
+    if base is not None and base.type == 'MESH':
+        out.append(base)
+    for rec in settings.cuts:
+        if not rec.enabled:
+            continue
+        obj = bpy.data.objects.get(rec.target) if rec.target else None
+        if obj is not None and obj.type == 'MESH' and obj not in out:
+            out.append(obj)
+    return out
 
 
 # ----------------------------------------------------------------------------
@@ -647,9 +674,11 @@ def add_record(context, target, cut_type, contacts):
     settings = context.scene.esp
     _suspend += 1
     try:
-        base_name = target.get("esp_base", target.name) if target.get("esp_part") else target.name
         if not settings.base_object or bpy.data.objects.get(settings.base_object) is None:
-            settings.base_object = base_name
+            # the object under the cut is the plan's source, even when it is a part of
+            # an earlier build: its `esp_base` points at the model before those cuts,
+            # and rooting the plan there would undo every cut already approved
+            settings.base_object = target.name
         rec = settings.cuts.add()
         rec.name = unique_record_name(settings, "Base Split" if len(contacts) == 2 else PREFIX[cut_type])
         rec.cut_type = cut_type

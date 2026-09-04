@@ -57,15 +57,25 @@ easy_slice_print/
      range for the whole ribbon, taken from the furthest hit anywhere under the stroke, is what
      used to make a curve across a figure's near arm reach through the body behind it;
    * freehand: the loop drawn on the surface (over as many strokes and viewpoints as needed —
-     samples are stored in world space, so orbiting between strokes keeps the loop), pushed a
-     little outward along the surface normals - which is also what keeps its rim off the model,
-     so it needs no separate cutter - smoothed, resampled, splined, and spanned by a relaxed
+     samples are stored in world space, so orbiting between strokes keeps the loop), pushed
+     outward along the surface normals - which is also what keeps its rim off the model, so it
+     needs no separate cutter - splined, and spanned by a relaxed
      membrane (`surfaces.loop_patch` → `surfaces.membrane_fill`: concentric rings closed
      by a centre vertex, then the interior vertices are iterated onto the average of their
      neighbours with the boundary pinned). The fixed point of that iteration is the discrete
      minimal surface through the drawn loop: dead flat for a loop drawn from one viewpoint,
      a smooth saddle for a loop that wraps around the model. Nothing but a straight polyline is
      ever handed to the boolean, which is what keeps the printed cut face from showing facets.
+
+     Unlike a curve, a freehand loop is **not** resampled to *Control Points* and is not
+     smoothed by default: it is the tool for tracing a detail, so its control points are the
+     points that were drawn, however many that is (`loop_smoothing` defaults to 0, and
+     `surfaces.loop_boundary` spends what is left of its sample budget on the spline instead of
+     splining and then decimating). What is left between the stroke and the cut face is the
+     outward push, `plan.loop_margin` — every millimetre of it moves the cut off the traced
+     line, so it is kept as small as the *classification* in step 3 tolerates, not as small as
+     the boolean does: a loop at a hip junction separates cleanly at 0.8 mm but every loose
+     piece then votes to the same side of a membrane that local.
 2. **Kerf slab** — the patch is thickened by *Cut Gap* along its vertex normals into a closed
    solid (`surfaces.slab_from_patch`).
 3. **Split** — `model − slab` (Boolean modifier, *Manifold* solver when available, *Exact*

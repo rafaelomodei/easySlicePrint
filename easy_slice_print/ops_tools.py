@@ -539,7 +539,7 @@ class ESP_OT_cut_curved(CutToolBase, bpy.types.Operator):
             self.reset_stroke()
             return None
         pts = surfaces.resample_polyline(pts, settings.control_points)
-        pts = surfaces.smooth_polyline(pts, settings.freehand_smoothing)
+        pts = surfaces.smooth_polyline(pts, settings.stroke_smoothing)
         avg = Vector((0.0, 0.0, 0.0))
         for i in range(len(pts) - 1):
             avg += (pts[i + 1] - pts[i]).cross(d)
@@ -716,13 +716,18 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
             self.report({'WARNING'}, "Loop too small")
             self.reset_stroke()
             return None
-        pts = surfaces.smooth_polyline(pts, settings.freehand_smoothing, closed=True)
-        pts = surfaces.resample_polyline(pts, settings.control_points, closed=True)
+        # No resample to a fixed count and no smoothing by default. A freehand loop is
+        # the tool for tracing a detail - a groove, an ear, the line where two shapes
+        # meet - so its control points are the points that were drawn: 50 samples stay
+        # 50, 300 stay 300, and the cut face runs through them. Control Points sizes a
+        # Curve cut; forcing a loop down to 20 of them moved the rim by millimetres and
+        # rounded off the very detail the loop was drawn to catch.
+        pts = surfaces.smooth_polyline(pts, settings.loop_smoothing, closed=True)
         n = surfaces.newell_normal(pts)
         if n.z < -1e-6 or (abs(n.z) <= 1e-6 and n.x < 0):
             pts.reverse()
-        # smoothing, resampling and the spline all pull the rim back towards the model;
-        # the membrane is built on a rim measured against the model AFTER all of them
+        # the spline between the points can still cut a corner back into the material;
+        # the membrane is built on a rim measured against the model after it
         pts = plan.clear_of_model(context, self.target, pts, margin)
         try:
             verts, faces = plan.loop_surface(context, self.target, pts, settings.surface_detail, margin)

@@ -95,7 +95,7 @@ const pt: Dict = {
       body: "Para tudo o que um plano não alcança: desenhe um laço fechado <em>em volta</em> da superfície — um pescoço, um pulso, uma cauda — orbitando entre os traços. O laço é preenchido e vira a superfície de corte.",
       checks: [
         "Orbite com o <kbd>botão do meio</kbd> enquanto desenha e feche o laço no ponto inicial ou com <kbd>Enter</kbd>",
-        "Suavização e quantidade de pontos de controle ajustáveis antes e depois",
+        "Guarda cada ponto que você desenha: um detalhe traçado chega à face de corte impressa",
       ],
     },
     build: {
@@ -255,7 +255,8 @@ const pt: Dict = {
     body: "Grátis, sem conta, sem chave de licença. O zip instala direto no Blender. Código-fonte, issues e versões antigas estão no GitHub.",
     releases: "Todas as releases",
     changelog: "Changelog",
-    note: "Em breve também na plataforma Blender Extensions, para instalar direto pelo <em>Preferences → Get Extensions</em>.",
+    extension: "Blender Extensions",
+    note: "Também na <a href=\"{extensionUrl}\" target=\"_blank\" rel=\"noopener\">plataforma Blender Extensions</a> — assim que passar pela revisão, dá para instalar e atualizar direto pelo <em>Preferences → Get Extensions</em>.",
     meta: {
       version: "Versão",
       blender: "Blender",
@@ -331,6 +332,7 @@ const pt: Dict = {
       title: "Projeto",
       source: "Código-fonte",
       releases: "Releases",
+      extension: "Blender Extensions",
       changelog: "Changelog",
       license: "Licença",
     },

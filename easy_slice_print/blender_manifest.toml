@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 
 id = "easy_slice_print"
-version = "0.3.3-alpha"
+version = "0.3.4-alpha"
 name = "EasySlice Print"
 tagline = "Non-destructive model splitting and connectors for 3D printing"
 maintainer = "Rafael Omodei"

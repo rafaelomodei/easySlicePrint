@@ -59,6 +59,21 @@ is licensed under the same terms, and to follow the [Code of Conduct](CODE_OF_CO
 2. Move the *Unreleased* notes in `CHANGELOG.md` to a new version heading with the date.
 3. Commit, tag `vX.Y.Z` and push the tag — the *Release* workflow tests, builds and attaches the
    zip to a GitHub release.
+4. Publish to [extensions.blender.org](https://extensions.blender.org/approval-queue/easy-slice-print/)
+   when the release is meant to reach users there. Blender's own extension command line stops at
+   the zip (`blender --command extension build` / `validate`, both run by `scripts/build.sh`);
+   the upload goes through the [platform API](https://developer.blender.org/docs/features/extensions/ci_cd/):
+   ```bash
+   scripts/publish_extension.sh --dry-run                      # what it would send
+   BLENDER_EXTENSIONS_TOKEN=... scripts/publish_extension.sh   # upload
+   ```
+   The token comes from your profile page on the extensions platform; in CI it is the
+   `BLENDER_EXTENSIONS_TOKEN` repository secret, used by the *Publish to Blender Extensions*
+   workflow. That workflow is **`workflow_dispatch` only** — run it by hand from the Actions tab.
+   Every upload enters the platform's moderation queue and a version cannot be pulled back, so
+   nothing publishes on a schedule or on a tag push. (To change that, uncomment the `push` trigger
+   in `.github/workflows/publish-extension.yml`.) Release notes are taken from that version's
+   `CHANGELOG.md` section and trimmed to the API's 1024-character limit.
 
 ## Roadmap ideas
 

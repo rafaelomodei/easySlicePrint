@@ -6,6 +6,43 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.4-alpha] - 2026-09-04
+
+### Changed
+- **A Freehand loop keeps the points it was drawn through.** The stroke used to be smoothed
+  and then resampled down to *Control Points* — a Curve setting — so a 200 sample stroke
+  became 20 and the cut face left the traced line by millimetres, rounding off the very
+  detail the loop was drawn to catch. The drawn points are now the control points: 50 stay
+  50, 300 stay 300, and *Loop Smoothing* is a separate slider that starts at zero. Measured
+  on a stepped detail traced round a waist, the rim used to sit 2.3 mm off the stroke and
+  now sits on it. Plane and Curve cuts are unchanged; *Control Points* and *Smoothing* still
+  size a Curve cut and no longer appear while Freehand is the active tool.
+- **A freehand cut stays closer to the line you traced.** The rim is pushed outside the model
+  so the boolean can separate the part, and every millimetre of that push moves the cut off
+  the stroke. It was set at 2.5× *Surface Margin* partly to survive the smoothing and the
+  resample dragging the rim back into the material; with those gone it is 1.5×. That is still
+  twice what the hardest loop measured needs — the limit is not the boolean but the
+  classification after it: a loop at a hip junction separates the model cleanly at 0.8 mm,
+  yet every loose piece then votes to the same side of a membrane that local and the cut is
+  reported as one that never split the part. A side effect of the smaller push: a loop round
+  one thigh no longer reaches across and slices the neighbouring leg.
+- **A dense loop is no longer decimated.** The spline budget is spent on the samples that are
+  there rather than splining to 3× and resampling the result back down to 160, which was
+  itself moving the rim off the drawn points by up to 0.4 mm.
+
+### Added
+- **A command that publishes a release to extensions.blender.org.** Blender's own extension
+  command line stops at the zip (`extension build` / `extension validate`, both already run by
+  `scripts/build.sh`), so `scripts/publish_extension.sh` takes it from there: it picks the built
+  zip, cuts this version's changelog section down to the platform's 1024-character limit and
+  POSTs both to the extensions API. `--dry-run` shows the request without sending it. The
+  *Publish to Blender Extensions* workflow does the same in CI and is `workflow_dispatch` only —
+  a version reaches the platform when it is asked for, never on a tag push or a schedule, since
+  each upload enters moderation and cannot be pulled back.
+- **The Blender Extensions listing is linked from the README, the pt-BR README and the site**
+  (download button, footer and the download note, in all three languages), alongside the
+  install-from-Blender route through *Preferences → Get Extensions*.
+
 ## [0.3.3-alpha] - 2026-09-03
 
 ### Added
@@ -252,7 +289,8 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.3-alpha...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.4-alpha...HEAD
+[0.3.4-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.3-alpha...v0.3.4-alpha
 [0.3.3-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.2-alpha...v0.3.3-alpha
 [0.3.2-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.1-alpha...v0.3.2-alpha
 [0.3.1-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.2.3...v0.3.1-alpha

@@ -95,7 +95,7 @@ const es: Dict = {
       body: "Para todo lo que un plano no alcanza: dibuja un lazo cerrado <em>alrededor</em> de la superficie — un cuello, una muñeca, una cola — orbitando entre trazos. El lazo se rellena y se usa como superficie de corte.",
       checks: [
         "Orbita con <kbd>MMB</kbd> mientras dibujas, cierra el lazo en el punto inicial o con <kbd>Enter</kbd>",
-        "Suavizado y número de puntos de control ajustables antes y después",
+        "Conserva cada punto que dibujas: un detalle trazado llega a la cara de corte impresa",
       ],
     },
     build: {
@@ -255,7 +255,8 @@ const es: Dict = {
     body: "Gratis, sin cuenta, sin clave de licencia. El zip se instala directamente en Blender. El código fuente, las incidencias y las versiones anteriores están en GitHub.",
     releases: "Todas las versiones",
     changelog: "Changelog",
-    note: "Próximamente también en la plataforma Blender Extensions, para instalarlo desde <em>Preferences → Get Extensions</em>.",
+    extension: "Blender Extensions",
+    note: "También en la <a href=\"{extensionUrl}\" target=\"_blank\" rel=\"noopener\">plataforma Blender Extensions</a>: en cuanto pase la revisión podrás instalarlo y actualizarlo desde <em>Preferences → Get Extensions</em>.",
     meta: {
       version: "Versión",
       blender: "Blender",
@@ -331,6 +332,7 @@ const es: Dict = {
       title: "Proyecto",
       source: "Código fuente",
       releases: "Versiones",
+      extension: "Blender Extensions",
       changelog: "Changelog",
       license: "Licencia",
     },

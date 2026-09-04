@@ -1,0 +1,76 @@
+name: Publish to Blender Extensions
+
+# Manual on purpose. A build reaches extensions.blender.org when the maintainer says so,
+# not on a schedule and not on every tag: each upload enters the platform's moderation
+# queue, and there is no way to take a version back once it is through.
+#
+# Run it from Actions -> Publish to Blender Extensions -> Run workflow, after the Release
+# workflow has attached the zip to the GitHub release.
+#
+# To publish automatically with every release instead, uncomment the `push` trigger below -
+# the job already works out the version from the tag.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, e.g. v0.3.3-alpha (empty: build from this branch)"
+        required: false
+        type: string
+      dry_run:
+        description: "Show what would be uploaded and stop"
+        required: false
+        default: false
+        type: boolean
+  # push:
+  #   tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Resolve version
+        id: v
+        run: |
+          version=$(grep -E '^version *= *"' easy_slice_print/blender_manifest.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          tag="${{ inputs.tag }}"
+          tag="${tag:-${GITHUB_REF_NAME}}"
+          if [ "${tag#v}" != "$tag" ] && [ "${tag#v}" != "$version" ]; then
+            echo "tag $tag does not match manifest version $version" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      # Prefer the exact zip that was released, so the platform gets the artifact people
+      # already downloaded from GitHub. Falls back to building it here.
+      - name: Fetch released zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist
+          gh release download "${{ steps.v.outputs.tag }}" --pattern '*.zip' --dir dist \
+            || echo "no release asset for ${{ steps.v.outputs.tag }} - building instead"
+
+      - name: Download Blender
+        if: ${{ hashFiles('dist/*.zip') == '' }}
+        run: |
+          mkdir -p ~/blender
+          curl -sSL "https://download.blender.org/release/Blender5.2/blender-5.2.1-linux-x64.tar.xz" | tar -xJ -C ~/blender --strip-components=1
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libglu1-mesa libsm6 libxkbcommon0 > /dev/null
+
+      - name: Build
+        if: ${{ hashFiles('dist/*.zip') == '' }}
+        run: BLENDER=~/blender/blender scripts/build.sh
+
+      - name: Upload to extensions.blender.org
+        env:
+          BLENDER_EXTENSIONS_TOKEN: ${{ secrets.BLENDER_EXTENSIONS_TOKEN }}
+        run: |
+          scripts/publish_extension.sh \
+            --version "${{ steps.v.outputs.version }}" \
+            --zip "dist/easy_slice_print-${{ steps.v.outputs.version }}.zip" \
+            ${{ inputs.dry_run && '--dry-run' || '' }}

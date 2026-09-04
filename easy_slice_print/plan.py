@@ -406,9 +406,11 @@ def clear_of_model(context, target, points, margin):
     or a hair under it leaves a ring of material joining the two halves, and the cut
     comes back "does not split this part in two". Measuring the finished rim against
     the model and lifting it out is the only check that survives everything the loop
-    goes through on the way here: the stroke is pushed out along the surface normal
-    when it is drawn, but it is then smoothed, resampled down to a handful of control
-    points and splined again, and each of those pulls it back towards the material.
+    goes through on the way here: the stroke is pushed out along the surface normal when
+    it is drawn, and the spline between the points can still cut a corner back into the
+    material. A traced loop is no longer smoothed or resampled - it keeps the points it
+    was drawn through - so this now corrects a hair rather than a whole smoothing pass,
+    but it is still what guarantees the rim is outside.
     """
     if target is None or context is None or margin <= 0.0:
         return [Vector(p) for p in points]
@@ -441,9 +443,23 @@ def loop_surface(context, target, points, detail, margin, passes=None):
 # A freehand rim has to stand clear of the model by a real distance, not a hair: where
 # the slab wall leaves the surface almost tangentially the boolean welds the two halves
 # back together, and the part comes out in one piece with the cut face already carved
-# into it. Measured against loops that do separate, the clearance that works scales with
-# the loop, at around this multiple of the Surface Margin slider.
-LOOP_MARGIN_SCALE = 2.5
+# into it.
+#
+# That clearance is not free: the rim is pushed out along the surface normal, so every
+# millimetre of it is a millimetre the cut face has moved off the line that was traced -
+# which is the whole point of a freehand loop. It was 2.5x the slider partly because a
+# smoothed, 20-point resampled rim was dragged back towards the material by its own
+# pipeline and had to start far outside to survive that. A traced loop keeps its points
+# now, so the rim lands where it was put and the same cuts hold at less clearance.
+#
+# How much less is set by what fails first, and that is not the boolean: a loop round the
+# top of a thigh separates the model cleanly at 0.8 mm, but every loose piece then votes
+# to the same side of a membrane that local, and the cut is reported as one that never
+# split the part. Measured over loops round a waist, a thigh, a shin, a hip junction and
+# a neck, classification holds from about 1.2 mm on that worst case. This multiple leaves
+# a factor of two on it and still costs 40% less of the traced detail than 2.5 did.
+# Raise Surface Margin if a loop still fails to split.
+LOOP_MARGIN_SCALE = 1.5
 
 
 def loop_margin(context, src, points, diag):

@@ -224,13 +224,27 @@ ESP_CutRecord.__annotations__.update(connector_props(update=_record_update))
 class ESP_Settings(bpy.types.PropertyGroup):
     mode: EnumProperty(name="Mode", items=MODE_ITEMS, default='QUICK')
     tool: EnumProperty(name="Cut Tool", items=TOOL_ITEMS, default='STRAIGHT')
-    freehand_smoothing: FloatProperty(
+    stroke_smoothing: FloatProperty(
         name="Smoothing",
         description=(
             "Smooth the drawn stroke before the cut surface is built. Takes the shake and the "
-            "faceting of the model's own triangles out of a Curve or Freehand cut"
+            "faceting of the model's own triangles out of a Curve cut"
         ),
         default=0.35,
+        min=0.0,
+        max=1.0,
+        subtype='FACTOR',
+    )
+    loop_smoothing: FloatProperty(
+        name="Loop Smoothing",
+        description=(
+            "Round off a Freehand loop before the membrane is built. Off by default: a "
+            "freehand loop is the tool for tracing a detail, so the rim runs through the "
+            "points you drew and nothing rounds them away. Raise it a little only to take "
+            "the shake out of a long stroke - every step of it moves the cut off the line "
+            "you traced"
+        ),
+        default=0.0,
         min=0.0,
         max=1.0,
         subtype='FACTOR',
@@ -258,7 +272,14 @@ class ESP_Settings(bpy.types.PropertyGroup):
         subtype='FACTOR',
     )
     control_points: IntProperty(
-        name="Control Points", description="Editable points for curve and freehand cuts", default=20, min=4, max=96
+        name="Control Points",
+        description=(
+            "Editable points a Curve cut is resampled to. A Freehand loop ignores it and keeps "
+            "every point you drew, so a traced detail survives into the cut"
+        ),
+        default=20,
+        min=4,
+        max=96,
     )
     surface_detail: IntProperty(
         name="Surface Detail",
@@ -266,7 +287,8 @@ class ESP_Settings(bpy.types.PropertyGroup):
             "Spline samples built between two control points. The cut surface is generated at "
             "this resolution and its inside is relaxed flat, so a Curve or Freehand cut prints "
             "as smooth as a Plane cut instead of showing the facets of the control polyline. "
-            "Set it to 1 for the raw polyline"
+            "Set it to 1 for the raw polyline. A dense freehand loop already carries more "
+            "points than the spline budget, and uses as much of this as fits"
         ),
         default=3,
         min=1,

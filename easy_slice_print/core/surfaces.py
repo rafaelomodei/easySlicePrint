@@ -25,7 +25,7 @@ from mathutils import Vector
 
 SURFACE_DETAIL = 3  # spline samples generated per control point segment
 RELAX_PASSES = 40  # membrane relaxation passes for a strongly non planar loop
-MAX_LOOP_SAMPLES = 160  # boundary samples a filled loop is capped to, whatever the settings
+MAX_LOOP_SAMPLES = 600  # boundary samples a filled loop is capped to, whatever the settings
 
 
 # ----------------------------------------------------------------------------
@@ -379,6 +379,12 @@ def loop_boundary(points, detail=SURFACE_DETAIL):
     pts = [Vector(p) for p in points]
     if len(pts) < 3:
         raise ValueError("loop needs at least 3 points")
+    # A freehand stroke arrives dense - every point the user drew. Splining that by the
+    # full detail only to resample the result back down to the budget would move the rim
+    # off the points it was drawn through, which is the one thing a traced loop may not
+    # do. So spend the budget on the spline instead: a sparse loop still gets the full
+    # detail, a dense one gets what fits, and neither is decimated afterwards.
+    detail = max(1, min(detail, MAX_LOOP_SAMPLES // len(pts)))
     pts = dedupe_polyline(spline_polyline(pts, detail, closed=True), 1e-9)
     if len(pts) < 3:
         raise ValueError("loop is degenerate")

@@ -8,6 +8,7 @@
 <p align="center">
   <a href="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/rafaelomodei/easySlicePrint/releases"><img alt="Release" src="https://img.shields.io/github/v/release/rafaelomodei/easySlicePrint?include_prereleases"></a>
+  <a href="https://extensions.blender.org/approval-queue/easy-slice-print/"><img alt="Blender Extensions" src="https://img.shields.io/badge/Blender%20Extensions-in%20review-orange"></a>
   <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-yellow">
   <img alt="Blender 4.2 – 5.2" src="https://img.shields.io/badge/Blender-4.2%20%E2%80%93%205.2-orange">
   <a href="LICENSE"><img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue"></a>
@@ -17,6 +18,7 @@
 <p align="center">
   <a href="https://rafaelomodei.github.io/easySlicePrint/"><strong>Website</strong></a> ·
   <a href="https://github.com/rafaelomodei/easySlicePrint/releases/latest"><strong>Download</strong></a> ·
+  <a href="https://extensions.blender.org/approval-queue/easy-slice-print/"><strong>Blender Extensions</strong></a> ·
   <em>Português: veja <a href="README.pt-BR.md">README.pt-BR.md</a></em>
 </p>
 
@@ -78,6 +80,13 @@ Tested headless on Blender 4.2.23 LTS and 5.2.1 LTS (CI runs both). Works on Win
 
 ## Install
 
+**From Blender.** *Edit → Preferences → Get Extensions*, search for **EasySlice Print**, click
+*Install*. Blender then offers every new version by itself. The listing is
+[on extensions.blender.org](https://extensions.blender.org/approval-queue/easy-slice-print/)
+and is still going through the platform's review, so until it is approved use the zip below.
+
+**From the zip.**
+
 1. Download `easy_slice_print-<version>.zip` from the [releases](https://github.com/rafaelomodei/easySlicePrint/releases) (or build it, see below).
 2. Blender → *Edit → Preferences → Add-ons → ⌄ (top right) → Install from Disk…* → pick the zip.
 3. Enable **EasySlice Print**. The panel lives in the 3D Viewport sidebar (`N`) → **EasySlice** tab.
@@ -107,8 +116,14 @@ Tested headless on Blender 4.2.23 LTS and 5.2.1 LTS (CI runs both). Works on Win
    the end of a limb stops at the limb.
 
    A **Freehand** loop is drawn on the surface already, so its filled loop is the printed cut
-   face as it stands. *Surface Margin* sets how far a Curve surface reaches past the ends of your
-   stroke.
+   face as it stands — and it keeps every point you drew. Freehand is the tool for tracing a
+   detail, so it is not resampled down to *Control Points* (that sizes a Curve cut) and is not
+   smoothed unless you ask: draw 50 points and the cut runs through 50, draw 300 and it runs
+   through 300. What still stands between your stroke and the cut is *Surface Margin*: how far
+   the loop's rim is pushed outside the model so the boolean can separate the part. Every
+   millimetre of it moves the cut off the line you traced, so lower it for a fine detail and
+   raise it again if the cut reports that the part is still in one piece. On a Curve cut the
+   same slider sets how far the surface reaches past the ends of your stroke.
 
    On all three, the connector is the largest circle that actually fits inside the cut face, so
    it sits where the material is thickest and is as wide as that material allows.
@@ -155,9 +170,17 @@ into the socket. Connectors must be rigid (no articulated joints).
 # run the headless tests (needs a Blender binary on PATH or in $BLENDER)
 BLENDER=/path/to/blender scripts/run_tests.sh
 
-# build the installable zip into dist/
+# build the installable zip into dist/ (Blender's own `extension build` + `extension validate`)
 BLENDER=/path/to/blender scripts/build.sh
+
+# publish that zip to extensions.blender.org (maintainers; --dry-run shows what it would send)
+BLENDER_EXTENSIONS_TOKEN=... scripts/publish_extension.sh
 ```
+
+Publishing is deliberately manual — `scripts/publish_extension.sh` locally, or the
+[*Publish to Blender Extensions*](.github/workflows/publish-extension.yml) workflow, run by hand
+from the Actions tab. Nothing is uploaded on a schedule or on a tag push. See
+[CONTRIBUTING.md](CONTRIBUTING.md#releasing-maintainers).
 
 Code layout: `easy_slice_print/core/` is pure geometry (patches → kerf slab → booleans → connectors),
 `plan.py` holds the non-destructive records and previews, `ops_tools.py` the modal drawing tools,

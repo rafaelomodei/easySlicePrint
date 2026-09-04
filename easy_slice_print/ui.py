@@ -81,8 +81,13 @@ class ESP_PT_tools(ESPPanel, bpy.types.Panel):
         col.prop(s, "surface_margin", slider=True)
         if s.mode == 'PLAN':
             col.prop(s, "surface_origin", text="Origin")
-        col.prop(s, "freehand_smoothing", slider=True)
-        col.prop(s, "control_points")
+        if s.tool == 'FREEHAND':
+            # a traced loop keeps the points it was drawn through: Control Points is a
+            # Curve setting, and smoothing is the one knob that rounds a traced detail off
+            col.prop(s, "loop_smoothing", slider=True)
+        else:
+            col.prop(s, "stroke_smoothing", slider=True)
+            col.prop(s, "control_points")
         col.prop(s, "surface_detail")
         layout.prop(s, "two_contact", toggle=True, icon='MOD_MIRROR')
         if s.two_contact:

@@ -22,7 +22,8 @@ below is an original implementation; nothing was copied.
 | Reach the far side of the model while marking | orbit between strokes; the loop is kept in world space, hidden parts drawn faded, auto-close only on a visible start point, `Ctrl+Z` undoes a stroke, `Enter`/`C` close from any angle | `ESP_OT_cut_freehand` |
 | Fill a loop drawn across several viewpoints | the loop is spanned by a relaxed membrane (concentric rings, interior smoothed onto the average of its neighbours, boundary pinned) | `surfaces.membrane_fill` |
 | Cut faces that print smooth enough to mate | control points are splined and the fill relaxed, so a Curve/Freehand cut face is as smooth as a Plane cut instead of showing the facets of the control polyline | `surfaces.spline_polyline`, `surfaces.loop_patch` |
-| Control the stroke smoothing / editable point count / surface resolution | *Smoothing*, *Control Points* and *Surface Detail* | `ESP_PT_tools` |
+| Control the stroke smoothing / editable point count / surface resolution | *Smoothing*, *Control Points* and *Surface Detail* (a Curve cut); *Loop Smoothing* and *Surface Detail* for Freehand | `ESP_PT_tools` |
+| Trace a detail and have the cut land on it | a freehand loop keeps every point drawn - no resample to *Control Points*, no smoothing unless asked - so the rim runs through the stroke and a traced step survives into the printed face | `ESP_OT_cut_freehand.close_loop` |
 | Know which tool has the mouse | the pointer becomes a blade for the Plane Cut and a pencil while drawing a stroke or editing points | `ops_tools.set_cursor` |
 | Separate a figure from its base (two contacts at once) | **Two Contacts / Base Split** toggle; both contacts drawn in one go, one record `Base Split NNN` | `settings.two_contact` |
 | Automatically start the next cut | **Chain Cuts** | `settings.chain_cuts` |

@@ -108,7 +108,7 @@ const en = {
       body: "For everything a plane can't reach: draw a closed loop <em>around</em> the surface — a neck, a wrist, a tail — orbiting between strokes. The loop is filled and used as the cut surface.",
       checks: [
         "Orbit with <kbd>MMB</kbd> while drawing, close the loop at the start point or with <kbd>Enter</kbd>",
-        "Smoothing and control-point count adjustable before and after",
+        "Keeps every point you draw: a traced detail reaches the printed cut face",
       ],
     },
     build: {
@@ -268,7 +268,8 @@ const en = {
     body: "Free, no account, no license key. The zip installs straight into Blender. Source code, issues and older versions are on GitHub.",
     releases: "All releases",
     changelog: "Changelog",
-    note: "Also coming to the Blender Extensions platform, so you can install it from <em>Preferences → Get Extensions</em>.",
+    extension: "Blender Extensions",
+    note: "Also on the <a href=\"{extensionUrl}\" target=\"_blank\" rel=\"noopener\">Blender Extensions platform</a> — once it clears review you can install and update it straight from <em>Preferences → Get Extensions</em>.",
     meta: {
       version: "Version",
       blender: "Blender",
@@ -344,6 +345,7 @@ const en = {
       title: "Project",
       source: "Source code",
       releases: "Releases",
+      extension: "Blender Extensions",
       changelog: "Changelog",
       license: "License",
     },

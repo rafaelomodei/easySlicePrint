@@ -38,6 +38,7 @@ const vars: Record<string, string> = {
   blenderMax: site.blenderMax,
   license: site.license,
   author: site.author,
+  extensionUrl: site.links.blenderExtension,
   year: String(new Date().getFullYear()),
 };
 

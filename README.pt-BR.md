@@ -8,6 +8,7 @@
 <p align="center">
   <a href="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/rafaelomodei/easySlicePrint/releases"><img alt="Release" src="https://img.shields.io/github/v/release/rafaelomodei/easySlicePrint?include_prereleases"></a>
+  <a href="https://extensions.blender.org/approval-queue/easy-slice-print/"><img alt="Blender Extensions" src="https://img.shields.io/badge/Blender%20Extensions-em%20revis%C3%A3o-orange"></a>
   <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-yellow">
   <img alt="Blender 4.2 – 5.2" src="https://img.shields.io/badge/Blender-4.2%20%E2%80%93%205.2-orange">
   <a href="LICENSE"><img alt="Licença: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue"></a>
@@ -17,6 +18,7 @@
 <p align="center">
   <a href="https://rafaelomodei.github.io/easySlicePrint/"><strong>Site</strong></a> ·
   <a href="https://github.com/rafaelomodei/easySlicePrint/releases/latest"><strong>Download</strong></a> ·
+  <a href="https://extensions.blender.org/approval-queue/easy-slice-print/"><strong>Blender Extensions</strong></a> ·
   <em>English: see <a href="README.md">README.md</a></em>
 </p>
 
@@ -78,6 +80,13 @@ Testado headless no Blender 4.2.23 LTS e 5.2.1 LTS (o CI roda os dois). Funciona
 
 ## Instalação
 
+**Pelo Blender.** *Edit → Preferences → Get Extensions*, procure por **EasySlice Print** e clique
+em *Install*. A partir daí o próprio Blender oferece cada versão nova. A listagem está
+[no extensions.blender.org](https://extensions.blender.org/approval-queue/easy-slice-print/) e
+ainda passa pela revisão da plataforma — até ser aprovada, use o zip abaixo.
+
+**Pelo zip.**
+
 1. Baixe `easy_slice_print-<versão>.zip` nas [releases](https://github.com/rafaelomodei/easySlicePrint/releases) ou gere com `scripts/build.sh`.
 2. Blender → *Edit → Preferences → Add-ons → ⌄ (canto superior direito) → Install from Disk…* → escolha o zip.
 3. Ative **EasySlice Print**. O painel fica na sidebar do 3D Viewport (`N`) → aba **EasySlice**.
@@ -107,8 +116,14 @@ Testado headless no Blender 4.2.23 LTS e 5.2.1 LTS (o CI roda os dois). Funciona
    membro para no membro.
 
    O laço do **Freehand** já é desenhado sobre a superfície, então o laço preenchido já é a face
-   de corte impressa. *Surface Margin* define o quanto a superfície do Curve avança além das
-   pontas do traço.
+   de corte impressa — e ele guarda cada ponto que você desenhou. O Freehand é a ferramenta para
+   traçar um detalhe, então ele não é reamostrado para *Control Points* (isso dimensiona um corte
+   Curve) nem é suavizado a não ser que você peça: desenhe 50 pontos e o corte passa por 50,
+   desenhe 300 e passa por 300. O que ainda fica entre o traço e o corte é o *Surface Margin*:
+   o quanto a borda do laço é empurrada para fora do modelo para o boolean conseguir separar a
+   peça. Cada milímetro dele afasta o corte da linha que você traçou, então baixe para um detalhe
+   fino e levante de novo se o corte disser que a peça continua inteira. Num corte Curve o mesmo
+   controle define o quanto a superfície avança além das pontas do traço.
 
    Nos três, o conector é o maior círculo que realmente cabe dentro da face de corte: fica onde o
    material é mais grosso e tem a largura que esse material permite.
@@ -155,7 +170,13 @@ Conectores precisam ser rígidos (sem articulações).
 ```bash
 BLENDER=/caminho/para/blender scripts/run_tests.sh   # testes headless
 BLENDER=/caminho/para/blender scripts/build.sh       # gera o zip em dist/
+BLENDER_EXTENSIONS_TOKEN=... scripts/publish_extension.sh   # envia o zip para extensions.blender.org
 ```
+
+A publicação é manual de propósito — `scripts/publish_extension.sh` na máquina, ou o workflow
+[*Publish to Blender Extensions*](.github/workflows/publish-extension.yml), acionado à mão na aba
+Actions. Nada sobe por agendamento nem ao criar a tag. Veja
+[CONTRIBUTING.md](CONTRIBUTING.md#releasing-maintainers).
 
 Veja [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) e [docs/FEATURES.md](docs/FEATURES.md). O site público fica em
 [`website/`](website/) (Astro, publicado no GitHub Pages por `.github/workflows/pages.yml`).

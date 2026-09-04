@@ -394,29 +394,43 @@ def _figure_with_limbs():
     return obj
 
 
-def _traced_loop(obj, centre, axis, radius, samples=100, wobble=0.05):
-    """The samples a freehand stroke records tracing a ring round a limb."""
+def _traced_loop(obj, centre, axis, radius, samples=100, wobble=0.05, shape=None):
+    """The samples a freehand stroke records tracing a ring round a limb.
+
+    `shape(angle) -> offset along the axis` replaces the default gentle wobble, for a
+    stroke that traces a real detail: a step is what a 20 point resample cannot follow.
+    """
     depsgraph = bpy.context.evaluated_depsgraph_get()
     diag = mesh_utils.object_world_diagonal(obj)
     u, v = surfaces.plane_basis(Vector(axis))
+    if shape is None:
+
+        def shape(a):
+            return radius * wobble * math.sin(a * 3.0)
+
     out = []
     for k in range(samples):
         a = 2.0 * math.pi * k / samples
         d = u * math.cos(a) + v * math.sin(a)
-        aim = Vector(centre) + Vector(axis).normalized() * (radius * wobble * math.sin(a * 3.0)) + d * radius
+        aim = Vector(centre) + Vector(axis).normalized() * shape(a) + d * radius
         hit, loc, nor, _i = mesh_utils.object_ray_cast(obj, aim + d * diag, -d, depsgraph, max_dist=diag * 4.0)
         if hit:
             out.append((loc, nor.normalized()))
     return out
 
 
-def _freehand_patch(obj, loop, margin, smoothing=0.35, control_points=20, detail=3, clear=True):
-    """The membrane `close_loop` builds from a recorded stroke."""
+def _freehand_patch(obj, loop, margin, smoothing=0.0, control_points=None, detail=3, clear=True):
+    """The membrane `close_loop` builds from a recorded stroke.
+
+    Defaults mirror the tool: no smoothing, and every drawn point kept. Pass
+    `smoothing=0.35, control_points=20` to get the eroding pipeline this replaced.
+    """
     diag = mesh_utils.object_world_diagonal(obj)
     pts = [loc + nor * margin for loc, nor in loop]
     pts = surfaces.dedupe_polyline(pts, diag * 0.002)
     pts = surfaces.smooth_polyline(pts, smoothing, closed=True)
-    pts = surfaces.resample_polyline(pts, control_points, closed=True)
+    if control_points:
+        pts = surfaces.resample_polyline(pts, control_points, closed=True)
     n = surfaces.newell_normal(pts)
     if n.z < -1e-6 or (abs(n.z) <= 1e-6 and n.x < 0):
         pts.reverse()
@@ -444,10 +458,9 @@ def test_freehand_loop_really_leaves_the_model():
 
     Unlike a plane section or a curve ribbon, the membrane stops on its own rim, so the
     single thing separating the two halves is how far that rim reaches past the surface.
-    The stroke is pushed out along the surface normal when it is drawn - and then
-    smoothed, resampled down to a handful of control points and splined, each of which
-    drags it back towards the material. Measuring the finished rim is the only check
-    that survives all three.
+    The stroke is pushed out along the surface normal when it is drawn, and the pipeline
+    it then goes through can drag it back: measuring the finished rim against the model
+    is the only check that survives every step of it.
     """
     print("== a freehand loop's rim has to leave the model")
     reset_scene()
@@ -456,8 +469,9 @@ def test_freehand_loop_really_leaves_the_model():
     loop = _traced_loop(fig, Vector((0.0, 0.0, 0.0)), Vector((1.0, 0.0, 0.0)), 14.0)
     check(len(loop) > 80, f"the stroke recorded a full ring ({len(loop)} samples)")
 
-    # what the loop used to get: a fixed 0.6 mm push applied BEFORE the smoothing
-    verts, faces, rim = _freehand_patch(fig, loop, 0.6, clear=False)
+    # what the loop used to get: a fixed 0.6 mm push applied BEFORE a smoothing pass and
+    # a resample down to 20 control points, both of which pull the rim back into the model
+    verts, faces, rim = _freehand_patch(fig, loop, 0.6, smoothing=0.35, control_points=20, clear=False)
     sunk = _rim_depth(fig, verts, rim)
     check(sunk < 0.2, f"the old fixed push does not survive the pipeline (rim at {sunk:+.2f} mm)")
     spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2)
@@ -473,7 +487,7 @@ def test_freehand_loop_really_leaves_the_model():
     settings = bpy.context.scene.esp
     loop = _traced_loop(fig, Vector((0.0, 0.0, 0.0)), Vector((1.0, 0.0, 0.0)), 14.0)
     margin = plan.loop_margin(bpy.context, settings, [loc for loc, _n in loop], diag)
-    check(margin > 1.0, f"the margin is scaled to the loop, not a fixed hair ({margin:.2f} mm)")
+    check(margin > 0.5, f"the margin is scaled to the loop, not a fixed hair ({margin:.2f} mm)")
     verts, faces, rim = _freehand_patch(fig, loop, margin)
     clear = _rim_depth(fig, verts, rim)
     check(clear > margin * 0.5, f"the corrected rim really stands outside the model ({clear:+.2f} mm)")
@@ -481,6 +495,89 @@ def test_freehand_loop_really_leaves_the_model():
     a, b, _s = cutting.perform_cut(bpy.context, fig, spec, ("A", "B"), out_collection("new"))
     check(is_closed_manifold(a.data) and is_closed_manifold(b.data), "and the cut splits it into two solids")
     check(len(a.data.polygons) > 100 and len(b.data.polygons) > 100, "both halves carry real geometry")
+
+    # The clearance is what costs a traced loop its detail, so it is kept as small as it
+    # can be - and this is what decides how small. A loop round the top of a thigh, where
+    # the leg runs into the body, separates the model cleanly at 0.8 mm but every loose
+    # piece then votes to the same side of a membrane that local, and a cut that worked
+    # comes back as one that never split the part. It holds from about 1.2 mm; the
+    # clearance the tool picks has to stay clear of that, on this loop above all.
+    reset_scene()
+    fig = _figure_with_limbs()
+    hip = _traced_loop(fig, Vector((-14.0, -5.0, -12.0)), Vector((0.0, 0.0, 1.0)), 4.5)
+    margin = plan.loop_margin(bpy.context, settings, [loc for loc, _n in hip], diag)
+    check(margin > 1.2, f"a loop at the hip junction gets more than the 1.2 mm it needs ({margin:.2f} mm)")
+    verts, faces, _rim = _freehand_patch(fig, hip, margin)
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2)
+    a, b, _s = cutting.perform_cut(bpy.context, fig, spec, ("A", "B"), out_collection("hip"))
+    check(is_closed_manifold(a.data) and is_closed_manifold(b.data), "and that cut is reported as the split it is")
+
+
+def _dist_to_rim(p, rim):
+    """Distance from `p` to the closed polyline `rim`."""
+    best = 1e9
+    m = len(rim)
+    for i in range(m):
+        a, b = rim[i], rim[(i + 1) % m]
+        ab = b - a
+        sq = ab.length_squared
+        t = 0.0 if sq < 1e-12 else max(0.0, min(1.0, (p - a).dot(ab) / sq))
+        best = min(best, (p - (a + ab * t)).length)
+    return best
+
+
+def test_freehand_keeps_the_points_it_was_drawn_through():
+    """A traced loop is only worth drawing if the cut lands on the line you traced.
+
+    Freehand is the tool for catching a detail - a groove, a shoulder, the line where two
+    shapes meet - so what the stroke records has to reach the cut face. It used to be
+    smoothed and then resampled down to Control Points, which is a Curve setting: a stroke
+    of 200 samples became 20, and a step in the traced line came out rounded off by
+    millimetres. Now the drawn points are the control points, and the rim runs through
+    every one of them, pushed out by the clearance and nothing else.
+    """
+    print("== a freehand loop cuts on the line it was drawn on")
+    reset_scene()
+    fig = _figure_with_limbs()
+    diag = mesh_utils.object_world_diagonal(fig)
+    settings = bpy.context.scene.esp
+
+    # a stroke that traces a stepped detail round the waist, not a gentle wobble: a
+    # handful of control points can follow a sine, but not the corners of a step
+    def stepped(a):
+        return 4.0 * (1.0 if math.sin(a * 4.0) > 0.0 else -1.0)
+
+    loop = _traced_loop(fig, Vector((0.0, 0.0, 0.0)), Vector((1.0, 0.0, 0.0)), 14.0, samples=200, shape=stepped)
+    locs = [loc for loc, _n in loop]
+    margin = plan.loop_margin(bpy.context, settings, locs, diag)
+    # where every point of the rim belongs: the stroke, pushed clear along its own normal
+    want = [loc + nor * margin for loc, nor in loop]
+
+    kept = surfaces.dedupe_polyline(want, diag * 0.002)
+    check(
+        len(kept) >= len(loop) - 2,
+        f"the loop keeps the points it was drawn through ({len(kept)} of {len(loop)} samples)",
+    )
+    check(
+        len(kept) > settings.control_points * 3,
+        f"and is not cut down to Control Points ({len(kept)} kept, the setting says {settings.control_points})",
+    )
+
+    def strayed(**kw):
+        verts, _faces, rim = _freehand_patch(fig, loop, margin, **kw)
+        edge = [Vector(v) for v in verts[:rim]]
+        return max(_dist_to_rim(p, edge) for p in want)
+
+    now = strayed()
+    before = strayed(smoothing=0.35, control_points=20)
+    print(f"  rim strays {now:.3f} mm from the drawn points, was {before:.3f} mm")
+    check(now < 0.2, f"the rim runs through the drawn points ({now:.3f} mm off)")
+    check(now < before / 4.0, f"a long way closer than the resampled rim ({before:.3f} mm off)")
+
+    verts, faces, _rim = _freehand_patch(fig, loop, margin)
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2)
+    a, b, _s = cutting.perform_cut(bpy.context, fig, spec, ("A", "B"), out_collection("traced"))
+    check(is_closed_manifold(a.data) and is_closed_manifold(b.data), "and the traced cut still splits the model")
 
 
 def test_a_split_that_worked_is_not_reported_as_a_failure():
@@ -490,7 +587,12 @@ def test_a_split_that_worked_is_not_reported_as_a_failure():
     off the end of it - a leg's centroid is half the model away from a loop drawn round
     its thigh - and out there the nearest facet's normal means nothing. Classifying by
     the centroid put every piece on one side and reported a cut that had worked as one
-    that never split the part.
+    that never split the part, which is why `mesh_side` votes over the geometry instead.
+
+    The centroid is only printed here now: the membrane this fixture builds is no longer
+    the sprawling one that produced the original misclassification, and a premise that
+    has stopped being true is not worth asserting. What has to hold is the outcome -
+    both sides are found, and the offcut is not on the same side as the rest.
     """
     print("== a cut that did separate is not reported as a failure")
     reset_scene()
@@ -513,11 +615,8 @@ def test_a_split_that_worked_is_not_reported_as_a_failure():
     pieces = mesh_utils.separate_loose_meshes(bpy.context, work)
     check(len(pieces) > 1, f"the boolean did separate the model ({len(pieces)} pieces)")
     centroids = [cutting.side_sign(mesh_utils.mesh_centroid(p), bvh) for p in pieces]
-    check(
-        not (any(v > 0 for v in centroids) and any(v < 0 for v in centroids)),
-        f"the centroid test alone put every piece on one side ({centroids})",
-    )
     votes = [cutting.mesh_side(p, bvh) for p in pieces]
+    print(f"  centroid says {centroids}, the vote says {votes}")
     check(any(v > 0 for v in votes) and any(v < 0 for v in votes), f"and both sides are found ({votes})")
     big = max(pieces, key=lambda m: len(m.polygons))
     small = min(pieces, key=lambda m: len(m.polygons))
@@ -925,6 +1024,7 @@ if __name__ == "__main__":
     test_two_contacts()
     test_custom_connector_and_remesh()
     test_freehand_loop_really_leaves_the_model()
+    test_freehand_keeps_the_points_it_was_drawn_through()
     test_a_split_that_worked_is_not_reported_as_a_failure()
     test_edited_connector_is_the_one_built()
     test_stepped_cut()

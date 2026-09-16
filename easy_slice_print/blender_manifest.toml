@@ -8,7 +8,7 @@ maintainer = "Rafael Omodei"
 type = "add-on"
 
 website = "https://github.com/rafaelomodei/easySlicePrint"
-tags = ["Mesh", "Object", "3D View"]
+tags = ["Mesh", "Object"]
 
 blender_version_min = "4.2.0"
 

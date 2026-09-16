@@ -30,6 +30,11 @@ All notable changes to this project are documented here. The format follows
   lying right on it could outvote a whole cut face; the weight is now capped at a quarter of the
   kerf.
 
+### Changed
+- **The extension is tagged *Mesh* and *Object* only.** *3D View* was removed from the manifest at
+  the request of the extensions.blender.org review; the platform reads the tags from the manifest
+  of each uploaded version, so this takes effect with this release.
+
 [#1]: https://github.com/rafaelomodei/easySlicePrint/issues/1
 
 ## [0.3.4-alpha] - 2026-09-04

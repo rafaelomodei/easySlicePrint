@@ -110,6 +110,12 @@ ainda passa pela revisão da plataforma — até ser aprovada, use o zip abaixo.
    elas, então passe a linha por cima delas também. Mova ou gire o preview no Plan Mode e a seção
    é refeita onde ele parar.
 
+   Seja qual for a ferramenta, um corte que deixa a peça inteira também *mostra* onde: a
+   superfície de corte é pintada de vermelho onde as duas metades continuam unidas, laranja em
+   volta e verde onde o corte está atravessando — toda vermelha quando nenhuma parte dela alcança
+   o modelo. Corrija o corte com o mapa à vista; ele some no próximo build, ou no **✕** ao lado
+   dele na barra lateral.
+
    O corte **Curve** segue o modelo do mesmo jeito: cada ponto do traço vai exatamente até onde
    vai o material embaixo dele, e só atravessa o bloco de material em que o traço está apoiado —
    passe sobre o braço da frente e o corpo atrás fica intacto. Um traço que sai do fim de um

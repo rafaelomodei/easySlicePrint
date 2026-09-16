@@ -41,6 +41,7 @@ below is an original implementation; nothing was copied.
 | Cut gap / kerf in mm | *Cut Gap* → kerf slab subtracted before splitting | `surfaces.slab_from_patch` |
 | Keep the source model | **Keep Original** → hidden in `ESP_Backup` | `plan.move_to_backup` |
 | Continue after a failed cut | **Skip Failed Cuts** | `ESP_OT_build` |
+| See why a cut failed | a cut that leaves the part in one piece paints the cut surface red where the halves stay joined and green where the cut goes through, all red when none of it reaches the model (*Show Why a Cut Failed* to turn it off, **✕** in the sidebar to hide) | `core/diagnosis.py`, `overlay.py`, `ESP_OT_hide_diagnosis` |
 | Remesh (draft only) | **Remesh** sub-panel (voxel size, adaptivity, smooth) | `cutting.remesh_mesh` |
 | Build, return to draft, approve, delete history | **Build** / **Back to Plan** / **Approve** / **Clear Plan** | `ops_plan.py` |
 | Parts land in a collection | `ESP_Built_<name>` with `<name>_PART_001…` (Quick mode: `_UPPER/_LOWER`, `_LEFT/_RIGHT`, `_FRONT/_BACK`) | `cutting.side_labels` |

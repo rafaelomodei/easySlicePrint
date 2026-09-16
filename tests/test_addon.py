@@ -16,7 +16,7 @@ from mathutils import Matrix, Vector
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import easy_slice_print  # noqa: E402
-from easy_slice_print import plan, ui  # noqa: E402
+from easy_slice_print import overlay, plan, ui  # noqa: E402
 from easy_slice_print.core import connectors, cutting, mesh_utils, surfaces  # noqa: E402
 
 FAILS = []
@@ -104,8 +104,8 @@ def plane_contact(z, diag, hit_x=10.0):
     return d
 
 
-def curve_contact(obj, diag):
-    pts = [Vector((10.0, -14 + 28 * i / 19, 15.0 + 3.0 * math.sin(i / 19 * math.pi * 2))) for i in range(20)]
+def curve_contact(obj, diag, y_end=14.0):
+    pts = [Vector((10.0, -14 + (14 + y_end) * i / 19, 15.0 + 3.0 * math.sin(i / 19 * math.pi * 2))) for i in range(20)]
     d = plan.ContactData('CURVED')
     d.points = pts
     d.view_dir = Vector((-1, 0, 0))
@@ -152,6 +152,91 @@ def world_bounds(obj):
     mn = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
     mx = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
     return mn, mx
+
+
+def failing_build():
+    """`esp.build` when it is expected to fail: in background mode the error report raises."""
+    try:
+        return bpy.ops.esp.build()
+    except RuntimeError:
+        return {'CANCELLED'}
+
+
+def test_build_shows_why_a_cut_failed():
+    """A build that fails puts the diagnosis up; the next build, or the X, takes it down."""
+    print("== a failed build paints where the cut stays joined")
+    sc = reset_scene()
+    obj = make_cylinder()
+    s = sc.esp
+    s.mode = 'PLAN'
+    diag = mesh_utils.object_world_diagonal(obj)
+    ctx = bpy.context
+    # a plane that reaches only half way across the cylinder
+    d = plan.ContactData('STRAIGHT')
+    d.verts, d.faces = surfaces.rect_patch(
+        Vector((-10, 0, 5)), Vector((0, 0, 1)), Vector((1, 0, 0)), 10.0, (-30.0, 30.0)
+    )
+    d.view_dir = Vector((-1, 0, 0))
+    d.hit = Vector((-10, 0, 5))
+    d.through = Vector((1, 0, 0))
+    d.anchor = d.hit.copy()
+    rec = plan.add_record(ctx, obj, 'STRAIGHT', [d])
+    rec.add_pin = False
+    res = failing_build()
+    check(res == {'CANCELLED'} and not s.built, "the half cut does not build")
+    shown = overlay.shown()
+    check(shown is not None and shown.cut and shown.label == rec.name, "the diagnosis is up, named after the cut")
+    check(shown.surface is not None, "the cut surface is painted")
+    pos, colors, _idx = shown.surface
+    reds = [p for p, c in zip(pos, colors) if c[0] > 0.9 and c[1] < 0.4]
+    greens = [p for p, c in zip(pos, colors) if c[1] > 0.8 and c[0] < 0.5]
+    check(reds and max(p[0] for p in reds) > -1.0, "the surface is red where it stops inside the cylinder")
+    check(greens and min(p[0] for p in greens) < -15.0, "and green where it cut through")
+    draw_all_panels(ctx)
+    check(True, "panels draw with the diagnosis box")
+    res = bpy.ops.esp.hide_diagnosis()
+    check(res == {'FINISHED'} and overlay.shown() is None, "the X takes it down")
+    # Ctrl+Z on the cut: the map is not in the undo history, so it has to follow the cut by hand
+    failing_build()
+    check(overlay.shown() is not None, "failed again, map up again")
+    overlay._undo_post(sc, None)
+    check(overlay.shown() is not None, "an undo that keeps the cut keeps the map")
+    plan.remove_record(ctx, 0)
+    overlay._undo_post(sc, None)
+    check(overlay.shown() is None, "an undo that takes the cut away takes the map with it")
+    rec = plan.add_record(ctx, obj, 'STRAIGHT', [d])
+    rec.add_pin = False
+    # a plane across the whole cylinder builds, and puts no map up
+    plan.remove_record(ctx, 0)
+    rec = plan.add_record(ctx, obj, 'STRAIGHT', [plane_contact(5.0, diag)])
+    rec.add_pin = False
+    bpy.ops.esp.build()
+    check(overlay.shown() is None, "a build that failed earlier leaves nothing behind once it works")
+    bpy.ops.esp.return_to_plan()
+    # a curve that stops half way across: what is painted is the surface on screen - the
+    # ribbon trimmed to the model - not the flat ribbon the boolean is handed
+    plan.remove_record(ctx, 0)
+    half = curve_contact(obj, diag, y_end=0.0)
+    check(half.cutter is not None, "the half curve has a separate cutter")
+    rec = plan.add_record(ctx, obj, 'CURVED', [half])
+    rec.add_pin = False
+    res = failing_build()
+    shown = overlay.shown()
+    check(res == {'CANCELLED'} and shown is not None, "the half curve fails and is painted")
+    pos, _colors, _idx = shown.surface
+    reach = max(abs(p[0]) for p in pos)
+    past = max(abs(v.x) for v in half.cutter[0])
+    check(reach < 11.0 < past, f"painted on the trimmed preview (x to {reach:.1f}), not the cutter (x to {past:.1f})")
+    check(len(pos) >= len(half.verts), "every preview vertex is in the painted surface")
+    bpy.ops.esp.hide_diagnosis()
+    # with the diagnosis off the build just fails
+    s.diagnose_failed = False
+    plan.remove_record(ctx, 0)
+    rec = plan.add_record(ctx, obj, 'STRAIGHT', [d])
+    rec.add_pin = False
+    res = failing_build()
+    check(res == {'CANCELLED'} and overlay.shown() is None, "with Show Why a Cut Failed off there is no map")
+    s.diagnose_failed = True
 
 
 def test_plane_section_preview():
@@ -683,6 +768,7 @@ if __name__ == "__main__":
     test_freehand_connector_fits_the_loop()
     test_freehand_cut_lands_on_the_loop()
     test_plane_section_preview()
+    test_build_shows_why_a_cut_failed()
     test_unregister()
     print(f"\n{len(FAILS)} failure(s)")
     for f in FAILS:

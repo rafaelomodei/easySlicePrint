@@ -317,6 +317,14 @@ class ESP_Settings(bpy.types.PropertyGroup):
         default=False,
         description="When a planned cut fails, skip it and keep building the others",
     )
+    diagnose_failed: BoolProperty(
+        name="Show Why a Cut Failed",
+        default=True,
+        description=(
+            "When a cut does not split the part, paint the cut surface red where the two halves stay joined "
+            "and green where the cut is working (takes a moment on a dense mesh)"
+        ),
+    )
     remesh_enable: BoolProperty(
         name="Remesh Parts",
         default=False,

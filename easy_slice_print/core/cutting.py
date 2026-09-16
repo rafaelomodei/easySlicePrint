@@ -10,11 +10,15 @@ from dataclasses import dataclass, field
 import bpy
 from mathutils import Matrix, Vector
 
-from . import connectors, mesh_utils, surfaces
+from . import connectors, diagnosis, mesh_utils, surfaces
 
 
 class CutError(Exception):
-    pass
+    """A cut that could not be made. `diagnosis` says where, when that could be found."""
+
+    def __init__(self, message, where=None):
+        super().__init__(message)
+        self.diagnosis = where
 
 
 @dataclass
@@ -30,6 +34,13 @@ class ContactSpec:
     # make one from scratch, which is all Quick mode has.
     pin_mesh: object = None
     regions_skipped: int = 0  # regions the plane crosses that this surface leaves uncut
+    # The surface the user sees, as (verts, faces), when `verts`/`faces` is a separate cutter
+    # (a plane's quad, a curve's flat ribbon, a loop's skirted membrane). A failed cut is
+    # diagnosed on the cutter but painted on this: it is the mesh on screen, and the one edited.
+    preview: tuple | None = None
+
+    def shown_patch(self):
+        return self.preview if self.preview is not None else (self.verts, self.faces)
 
 
 @dataclass
@@ -44,6 +55,7 @@ class CutSpec:
     remesh_voxel: float = 0.0  # BU
     remesh_adaptivity: float = 0.0
     remesh_smooth: bool = False
+    diagnose: bool = True  # on a cut that does not split the part, map where it stays joined
 
 
 # ----------------------------------------------------------------------------
@@ -210,7 +222,10 @@ def split_mesh_steps(context, mesh, spec):
             mesh_utils.remove_mesh(work)
             work = res
         if len(work.polygons) == 0:
-            raise CutError("Boolean failed (empty result). Check that the mesh is closed and manifold.")
+            raise CutError(
+                "Boolean failed (empty result). Check that the cut reaches the model and the mesh is closed.",
+                diagnosis.nothing_cut(*spec.contacts[0].shown_patch()) if spec.diagnose else None,
+            )
         yield "separating the parts"
         orphans = mesh_utils.separate_loose_meshes(context, work)
         work = None
@@ -220,7 +235,11 @@ def split_mesh_steps(context, mesh, spec):
         for p in orphans:
             (side_a if mesh_side(p, bvh, floor=spec.gap * 0.25) > 0 else side_b).append(p)
         if not side_a or not side_b:
-            raise CutError(still_joined_message(spec))
+            found = None
+            if spec.diagnose:
+                yield "finding where the halves stay joined"
+                found = diagnosis.diagnose(orphans, c0.verts, c0.faces, spec.gap, shown=c0.shown_patch())
+            raise CutError(still_joined_message(spec), found)
         out = mesh_utils.join_meshes(side_a, "_esp_part_a"), mesh_utils.join_meshes(side_b, "_esp_part_b")
         orphans = []
         return out

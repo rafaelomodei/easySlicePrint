@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.6-alpha] - 2026-09-16
+
+### Added
+- **A cut that fails now shows you where.** When the boolean removes material but the part
+  comes out in one piece, the cut surface is painted red where the two halves are still
+  joined, orange around it and green where the cut is going through — along the rim of a
+  freehand loop that welded to the surface, at the end of a plane that stops inside the
+  material — and all red when none of it reaches the model. The model itself is left alone:
+  the surface is what you edit, so the surface carries the map. It is a viewport overlay,
+  gone with the next build, the next cut or the **✕** in the sidebar. The join is found from
+  the slot the boolean carved: every vertex on the new cut faces knows which side of the
+  cutter it is on, two fronts flood the mesh from there and never cross the slot, and where
+  they meet is the material that keeps the part whole (`core/diagnosis.py`, `overlay.py`).
+  *Show Why a Cut Failed* in **Options** turns it off; it takes a moment on a very dense mesh.
+  The map is painted on the surface the plan shows - a curve's ribbon trimmed to the model, a
+  plane's section - never on the separate cutter the boolean is handed, and it follows Ctrl+Z:
+  an undo that takes the cut away takes the map with it.
+
+### Changed
+- The "Boolean failed (empty result)" message now also points at the more common cause: a cut
+  surface that does not reach the model.
+
 ## [0.3.5-alpha] - 2026-09-15
 
 ### Fixed
@@ -320,7 +342,8 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.5-alpha...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.6-alpha...HEAD
+[0.3.6-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.5-alpha...v0.3.6-alpha
 [0.3.5-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.4-alpha...v0.3.5-alpha
 [0.3.4-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.3-alpha...v0.3.4-alpha
 [0.3.3-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.2-alpha...v0.3.3-alpha

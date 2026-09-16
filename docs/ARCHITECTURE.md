@@ -12,11 +12,13 @@ easy_slice_print/
 ├── ops_misc.py             explode/collapse, export, connector library, check mesh
 ├── ui.py                   sidebar panels + UIList
 ├── draw.py                 GPU overlay helpers
+├── overlay.py              the failed-cut heat map drawn on the cut surface (POST_VIEW handler)
 └── core/                   pure geometry, no UI, no bpy.context
     ├── units.py            mm ↔ Blender units
     ├── mesh_utils.py       temp objects, boolean (modifier based), loose parts, measurements, ray helpers
     ├── surfaces.py         cut patches (plane / ribbon / loop), polyline utils, kerf slab
     ├── connectors.py       unit connector meshes, frames, library collection
+    ├── diagnosis.py        where a cut that did not split the part stays joined, and a score for any point
     └── cutting.py          CutSpec → split → connectors → remesh → result objects
 ```
 
@@ -102,6 +104,20 @@ easy_slice_print/
    their centroid against the first patch (BVH nearest point + normal). Side **A** is the + side.
    Parts on the same side are joined, so a plane through both arms still gives exactly two objects.
    Two-contact cuts subtract both slabs before separating.
+
+   When every piece lands on one side the part did not split, and before the `CutError` goes out
+   the result is diagnosed (`diagnosis.diagnose`): every vertex within the kerf of the cutter
+   sits on one of the new cut faces and knows its side (the sign of its offset along the
+   cutter's normal); two fronts flood the edge graph from those seeds, one per side, and cannot
+   cross the slot; the faces where they meet are the material still joining the halves. The
+   `Diagnosis` keeps a BVH of those faces and rides on the error; `Diagnosis.score_points`
+   scores any point by its distance to them (0 on them, 1 at a radius sized to the face that
+   was carved). `overlay.show` paints the cut surface the user sees with it - the plan's
+   preview mesh, handed over as `ContactSpec.preview`, not the cutter, which is a different
+   shape on purpose (a quad, a flat ribbon, a skirted membrane) - tessellated so the gradient
+   shows on a coarse face, drawn without a depth test like the preview, red → orange → green,
+   and leaves the model alone: the surface is what the user edits. A cutter that never carved
+   a face on both sides did not cut at all: no seeds, no join, and the whole surface is painted red.
 4. **Connector** — the pin frame comes from `estimate_pin_frame`: the point where the stroke hit the
    model and the exit point along the view ray give a first centre; 16 in-plane rays refine it to the
    middle of the cross-section and the shortest ray gives the inscribed diameter (used by the size

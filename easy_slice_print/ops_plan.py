@@ -9,7 +9,7 @@ from bpy.props import IntProperty
 from bpy_extras import view3d_utils
 from mathutils import Vector
 
-from . import draw, jobs, plan
+from . import draw, jobs, overlay, plan
 from .core import cutting, mesh_utils
 from .ops_tools import CURSOR_DRAW, NAV_EVENTS, dist2d, restore_cursor, set_cursor, window_region
 
@@ -54,6 +54,7 @@ class ESP_OT_delete_cut(bpy.types.Operator):
             return {'CANCELLED'}
         name = s.cuts[idx].name
         plan.remove_record(context, idx)
+        overlay.clear()
         self.report({'INFO'}, f"Removed '{name}'")
         return {'FINISHED'}
 
@@ -425,6 +426,8 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
         base = bpy.data.objects.get(s.base_object)
         if base is None:
             raise cutting.CutError("The plan's source object no longer exists. Clear the plan.")
+        overlay.clear()
+        self.failed = None  # (record name, diagnosis) of the first cut that did not split its part
         if s.built:
             _remove_built_parts(context)
         # after an approve the cuts can sit on different parts: each one is a source
@@ -457,6 +460,8 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
                 finally:
                     plan.restore_visibility(target, state)
             except cutting.CutError as e:
+                if self.failed is None and e.diagnosis is not None:
+                    self.failed = (rec.name, e.diagnosis)
                 if s.skip_failed:
                     skipped += 1
                     self.report({'WARNING'}, f"'{rec.name}' skipped: {e}")
@@ -464,7 +469,7 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
                 for o in made:
                     mesh_utils.remove_object(o)
                 bpy.data.collections.remove(col)
-                raise cutting.CutError(f"'{rec.name}' failed: {e}") from e
+                raise cutting.CutError(f"'{rec.name}' failed: {e}", e.diagnosis) from e
             parts.remove(target)
             if target not in sources:
                 made.remove(target)
@@ -506,6 +511,14 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
             msg += f" ({skipped} skipped)"
         return msg
 
+    def show_failed(self):
+        """Paint where the first failed cut stays joined; -> a note for the message, or ''."""
+        failed = getattr(self, "failed", None)
+        if failed is None:
+            return ""
+        name, diag = failed
+        return overlay.show_with_note(diag, name)
+
     # -- modal driver -------------------------------------------------------
     def invoke(self, context, event):
         if context.window is None:
@@ -529,10 +542,10 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
             self.report({'WARNING'}, "Build cancelled - the parts made so far were kept")
             return {'CANCELLED'}
         if state == jobs.ERROR:
-            self.report({'ERROR'}, str(payload))
+            self.report({'ERROR'}, str(payload) + self.show_failed())
             return {'CANCELLED'}
         s.last_message = payload
-        self.report({'INFO'}, payload + ". Plan preserved; use Back to Plan to edit.")
+        self.report({'INFO'}, payload + ". Plan preserved; use Back to Plan to edit." + self.show_failed())
         return {'FINISHED'}
 
     def execute(self, context):
@@ -540,10 +553,10 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
         try:
             msg = cutting.drain(self.build_steps(context))
         except cutting.CutError as e:
-            self.report({'ERROR'}, str(e))
+            self.report({'ERROR'}, str(e) + self.show_failed())
             return {'CANCELLED'}
         context.scene.esp.last_message = msg
-        self.report({'INFO'}, msg + ". Plan preserved; use Back to Plan to edit.")
+        self.report({'INFO'}, msg + ". Plan preserved; use Back to Plan to edit." + self.show_failed())
         return {'FINISHED'}
 
 
@@ -594,6 +607,7 @@ class ESP_OT_approve(bpy.types.Operator):
         s.built = False
         s.base_object = ""
         s.built_collection = ""
+        overlay.clear()
         s.last_message = "Parts approved"
         self.report({'INFO'}, "Parts approved. Use Export to write the files.")
         return {'FINISHED'}
@@ -622,7 +636,22 @@ class ESP_OT_clear_plan(bpy.types.Operator):
             s.base_object = ""
         s.built = False
         s.built_collection = ""
+        overlay.clear()
         s.last_message = "Plan cleared"
+        return {'FINISHED'}
+
+
+class ESP_OT_hide_diagnosis(bpy.types.Operator):
+    bl_idname = "esp.hide_diagnosis"
+    bl_label = "Hide Diagnosis"
+    bl_description = "Remove the red/green map of the failed cut from the viewport"
+
+    @classmethod
+    def poll(cls, context):
+        return overlay.active()
+
+    def execute(self, context):
+        overlay.clear()
         return {'FINISHED'}
 
 
@@ -638,6 +667,7 @@ CLASSES = (
     ESP_OT_return_to_plan,
     ESP_OT_approve,
     ESP_OT_clear_plan,
+    ESP_OT_hide_diagnosis,
 )
 
 

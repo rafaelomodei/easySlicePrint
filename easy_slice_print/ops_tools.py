@@ -8,7 +8,7 @@ import bpy
 from bpy_extras import view3d_utils
 from mathutils import Vector
 
-from . import draw, jobs, plan
+from . import draw, jobs, overlay, plan
 from .core import cutting, mesh_utils, surfaces
 
 NAV_EVENTS = {
@@ -110,6 +110,7 @@ def quick_cut_steps(context, target, contacts):
     """Generator form of `quick_cut` for the modal job driver (see `jobs.py`)."""
     settings = context.scene.esp
     scene = context.scene
+    overlay.clear()
     spec = plan.quick_spec(context, target, contacts)
     base_name = target.get("esp_base", target.name) if target.get("esp_part") else target.name
     col = plan.built_collection(scene, base_name)
@@ -140,6 +141,11 @@ def quick_cut_steps(context, target, contacts):
 def quick_cut(context, target, contacts):
     """Blocking Quick mode cut. The UI goes through `quick_cut_steps` instead."""
     return cutting.drain(quick_cut_steps(context, target, contacts))
+
+
+def failed_note(exc):
+    """Paint where a failed cut stays joined, if that was found; -> a note for the message, or ''."""
+    return overlay.show_with_note(getattr(exc, "diagnosis", None), "Quick cut")
 
 
 class CutToolBase(jobs.JobMixin):
@@ -362,7 +368,7 @@ class CutToolBase(jobs.JobMixin):
             self.report({'WARNING'}, "Cut cancelled")
             return {'CANCELLED'}
         if state == jobs.ERROR:
-            self.report({'ERROR'}, str(payload))
+            self.report({'ERROR'}, str(payload) + failed_note(payload))
             return {'CANCELLED'}
         a, b, secs = payload
         settings.last_message = f"Cut done in {secs:.2f}s"

@@ -398,75 +398,230 @@ def set_surface_points(obj, points):
     obj["esp_points"] = [c for p in points for c in p]
 
 
+def _clear_point(target, p, margin, depsgraph):
+    """`p` moved out of the model until it clears the surface by `margin`."""
+    p = Vector(p)
+    # lifting a point clear of the nearest surface can drop it into a second one (a
+    # loop round a thigh has the other leg right there), so look again
+    for _ in range(3):
+        found, loc, nor, depth = mesh_utils.object_surface_depth(target, p, depsgraph)
+        if not found or depth >= margin:
+            break
+        p = loc + nor * margin
+    return p
+
+
 def clear_of_model(context, target, points, margin):
     """Move each point out of the model until it clears the surface by `margin`.
 
-    A freehand membrane stops exactly on its own rim - unlike a plane section or a
-    curve ribbon, it is not extended past the model - so a rim that sits on the surface
-    or a hair under it leaves a ring of material joining the two halves, and the cut
-    comes back "does not split this part in two". Measuring the finished rim against
-    the model and lifting it out is the only check that survives everything the loop
-    goes through on the way here: the stroke is pushed out along the surface normal when
-    it is drawn, and the spline between the points can still cut a corner back into the
-    material. A traced loop is no longer smoothed or resampled - it keeps the points it
-    was drawn through - so this now corrects a hair rather than a whole smoothing pass,
-    but it is still what guarantees the rim is outside.
+    The tool no longer does this to a rim: a point the user drew is where the cut goes,
+    and lifting it off the surface - along one normal at a time, which in a crease
+    bounces the point between the two faces that meet there and carries it millimetres
+    out of the crease - is what put the cut face off the traced line. The clearance is
+    a skirt on the cutter now (`skirt_ring`, which lifts skirt vertices with the same
+    `_clear_point`). This is kept as the pipeline it replaced, so a test can measure
+    the two against each other.
     """
     if target is None or context is None or margin <= 0.0:
         return [Vector(p) for p in points]
     state = ensure_evaluable(target)
     try:
         depsgraph = context.evaluated_depsgraph_get()
+        return [_clear_point(target, p, margin, depsgraph) for p in points]
+    finally:
+        restore_visibility(target, state)
+
+
+def settle_on_model(context, target, points, detail):
+    """The rim: the drawn points, subdivided, and put onto the surface between them.
+
+    `surfaces.loop_boundary` with the model to hand. The rim is straight between two
+    drawn points, and where a stroke jumps across a junction - off a leg onto the body
+    in one mouse move - that straight segment runs through the material. The drawn
+    points are on the surface and never move; a point between them that is inside the
+    model is cast out along the two drawn normals' average, the way the mouse ray that
+    would have sampled it went, so the whole segment lands on one side of the limb
+    instead of the closest wall, which flips from side to side across it. A segment in
+    the air is left alone.
+    """
+    if target is None or context is None:
+        return surfaces.loop_boundary(points, detail)
+    pts = surfaces.decimate_polyline([Vector(p) for p in points], surfaces.MAX_LOOP_SAMPLES)
+    detail = max(1, min(detail, surfaces.MAX_LOOP_SAMPLES // len(pts)))
+    state = ensure_evaluable(target)
+    try:
+        depsgraph = context.evaluated_depsgraph_get()
+        diag = mesh_utils.object_world_diagonal(target)
+        hair = diag * 1e-5  # float noise on a point that is on the surface
+        normals = []
+        for p in pts:
+            found, _loc, nor, _depth = mesh_utils.object_surface_depth(target, p, depsgraph)
+            normals.append(nor if found else Vector((0.0, 0.0, 1.0)))
+        m = len(pts)
         out = []
-        for p in points:
-            p = Vector(p)
-            # lifting a point clear of the nearest surface can drop it into a second one
-            # (a loop round a thigh has the other leg right there), so look again
-            for _ in range(3):
-                found, loc, nor, depth = mesh_utils.object_surface_depth(target, p, depsgraph)
-                if not found or depth >= margin:
-                    break
-                p = loc + nor * margin
-            out.append(p)
+        for i in range(m):
+            a, b = pts[i], pts[(i + 1) % m]
+            axis = normals[i] + normals[(i + 1) % m]
+            if axis.length < 1e-6:
+                axis = normals[i]
+            axis.normalize()
+            for k in range(detail):
+                q = a.lerp(b, k / detail)
+                if k > 0:
+                    found, loc, _nor, depth = mesh_utils.object_surface_depth(target, q, depsgraph)
+                    if found and depth < -hair:
+                        hits = []
+                        for d in (axis, -axis):
+                            hit, hloc, _n, dist = mesh_utils.object_ray_cast(target, q, d, depsgraph, max_dist=diag)
+                            if hit:
+                                hits.append((dist, hloc))
+                        q = min(hits)[1] if hits else loc
+                out.append(q)
+        out = surfaces.dedupe_polyline(out, 1e-9)
+        if len(out) < 3:
+            raise ValueError("loop is degenerate")
         return out
     finally:
         restore_visibility(target, state)
 
 
+def _clearance(target, q, depsgraph):
+    """Signed distance from `q` to the model: positive outside, negative inside."""
+    found, loc, _nor, depth = mesh_utils.object_surface_depth(target, q, depsgraph)
+    if not found:
+        return 1e30
+    dist = (Vector(q) - loc).length
+    return dist if depth >= 0.0 else -dist
+
+
+def _march_clear(target, p, d, margin, depsgraph, want):
+    """`p` moved along `d`, at least by |d| and further until it clears the model by `want`.
+
+    Growing the offset along its own direction is what keeps the skirt from stepping
+    sideways: a sideways lift is what `_clear_point` does, and two neighbours lifted
+    sideways along different surfaces are how a skirt folds.
+    """
+    length = d.length
+    if length < 1e-9:
+        return Vector(p)
+    u = d / length
+    best, best_clear = Vector(p) + d, -1e30
+    t = length
+    step = margin * 0.125
+    while t <= margin * 3.0 + 1e-9:
+        q = Vector(p) + u * t
+        clear = _clearance(target, q, depsgraph)
+        if clear >= want:
+            return q
+        if clear > best_clear:
+            best, best_clear = q, clear
+        t += step
+    return best
+
+
+def skirt_ring(context, target, verts, faces, rim, margin):
+    """Where the cutter continues past each rim vertex: `margin` out, clear of the model.
+
+    The membrane's rim is on the surface, and the cutter has to leave it. Each rim
+    vertex gets one vertex beyond it, and the way out is tried in order: straight on in
+    the membrane's own surface (the cut continued past the model - right on a limb,
+    right along a crease, where it leaves the wedge of air between the two faces);
+    then that direction leaned towards the surface normal; then the normal itself,
+    which is what the rim used to be pushed along. A candidate is lifted clear of the
+    model and then checked from outside, with a ray cast back at the rim vertex: if the
+    ray meets the model before it gets there, the skirt face would run through material
+    - through the hem a crease is traced under - and the next way out is tried.
+
+    Chosen one vertex at a time, the offsets jump between neighbours: where the rim
+    passes from one surface onto another, and from one facet of the model to the next,
+    since the lift follows the facet's normal. A jump larger than the rim spacing folds
+    the skirt, so the offsets are smoothed along the rim (`surfaces.unfold_skirt`),
+    grown along their own direction until they clear the model again, and the few that
+    still break the rule are smoothed locally. The rim is not touched by any of it.
+    """
+    out = surfaces.rim_outward(verts, faces, rim)
+    pts = [Vector(verts[i]) for i in range(rim)]
+    if target is None or context is None or margin <= 0.0:
+        return [pts[i] + out[i] * margin for i in range(rim)]
+    state = ensure_evaluable(target)
+    try:
+        depsgraph = context.evaluated_depsgraph_get()
+        tol = margin * 0.3  # a rim vertex is on the surface, and the model is faceted
+        ring = []
+        for i in range(rim):
+            p = pts[i]
+            found, _loc, nor, _depth = mesh_utils.object_surface_depth(target, p, depsgraph)
+            ways = [out[i]]
+            if found:
+                lean = out[i] + nor
+                if lean.length > 1e-6:
+                    ways.append(lean.normalized())
+                ways.append(nor)
+            chosen = None
+            for d in ways:
+                if d.length < 1e-9:
+                    continue
+                q = _clear_point(target, p + d * margin, margin, depsgraph)
+                back = p - q
+                dist = back.length
+                if dist <= 1e-9:
+                    continue
+                chosen = q
+                hit, _l, _n, _d = mesh_utils.object_ray_cast(
+                    target, q, back / dist, depsgraph, max_dist=max(dist - tol, 0.0)
+                )
+                if not hit:
+                    break
+            ring.append(chosen if chosen is not None else p + out[i] * margin)
+        ring = surfaces.unfold_skirt(pts, ring, passes=200)
+        want = margin * 0.5
+        ring = [_march_clear(target, p, q - p, margin, depsgraph, want) for p, q in zip(pts, ring)]
+        return surfaces.unfold_skirt(pts, ring, local=True)
+    finally:
+        restore_visibility(target, state)
+
+
 def loop_surface(context, target, points, detail, margin, passes=None):
-    """The freehand membrane, with its rim pushed clear of the model. -> (verts, faces)"""
-    boundary = surfaces.loop_boundary(points, detail)
-    boundary = clear_of_model(context, target, boundary, margin)
-    return surfaces.loop_patch(points, detail=detail, passes=passes, boundary=boundary)
+    """The freehand membrane and its cutter. -> (verts, faces, cutter)
+
+    The membrane ends exactly on the drawn loop: that is the printed cut face, and the
+    outline the connector is measured against. Between two drawn points the rim is
+    put onto the surface where it would otherwise run through the model
+    (`settle_on_model`). `cutter` is the same surface continued `margin` past the rim
+    (`skirt_ring` + `surfaces.with_skirt`), which is what the boolean subtracts; it is
+    None when there is no clearance to add.
+    """
+    boundary = settle_on_model(context, target, points, detail)
+    verts, faces = surfaces.loop_patch(points, detail=detail, passes=passes, boundary=boundary)
+    rim = len(boundary)
+    if margin <= 0.0:
+        return verts, faces, None
+    ring = skirt_ring(context, target, verts, faces, rim, margin)
+    return verts, faces, surfaces.with_skirt(verts, faces, rim, ring)
 
 
-# A freehand rim has to stand clear of the model by a real distance, not a hair: where
+# A freehand cutter has to stand clear of the model by a real distance, not a hair: where
 # the slab wall leaves the surface almost tangentially the boolean welds the two halves
 # back together, and the part comes out in one piece with the cut face already carved
 # into it.
 #
-# That clearance is not free: the rim is pushed out along the surface normal, so every
-# millimetre of it is a millimetre the cut face has moved off the line that was traced -
-# which is the whole point of a freehand loop. It was 2.5x the slider partly because a
-# smoothed, 20-point resampled rim was dragged back towards the material by its own
-# pipeline and had to start far outside to survive that. A traced loop keeps its points
-# now, so the rim lands where it was put and the same cuts hold at less clearance.
-#
-# How much less is set by what fails first, and that is not the boolean: a loop round the
-# top of a thigh separates the model cleanly at 0.8 mm, but every loose piece then votes
-# to the same side of a membrane that local, and the cut is reported as one that never
+# The clearance used to be paid for in traced detail: the rim itself was pushed out by
+# it, so every millimetre of it was a millimetre the cut face had moved off the line.
+# The rim stays on the line now and the clearance is a skirt past it, so the multiple
+# is set only by what fails first - and that is not the boolean: a loop round the top
+# of a thigh separates the model cleanly at 0.8 mm, but every loose piece then votes to
+# the same side of a membrane that local, and the cut is reported as one that never
 # split the part. Measured over loops round a waist, a thigh, a shin, a hip junction and
-# a neck, classification holds from about 1.2 mm on that worst case. This multiple leaves
-# a factor of two on it and still costs 40% less of the traced detail than 2.5 did.
-# Raise Surface Margin if a loop still fails to split.
+# a neck, classification holds from about 1.2 mm on that worst case; this multiple
+# leaves a factor of two on it. Raise Surface Margin if a loop still fails to split.
 LOOP_MARGIN_SCALE = 1.5
 
 
 def loop_margin(context, src, points, diag):
-    """How far a freehand rim has to clear the model.
+    """How far a freehand cutter has to reach past its rim, clear of the model.
 
     Scaled to the loop, so the same slider means the same thing on a 20 mm figure and
-    on a 200 mm one, and floored at the kerf: a rim inside the kerf is no rim at all.
+    on a 200 mm one, and floored at the kerf: a skirt inside the kerf is no skirt at all.
     """
     u = mm(context)
     radius = surfaces.polyline_length(points, closed=True) / (2.0 * math.pi)
@@ -512,13 +667,15 @@ def rebuild_surface(obj, draft=False, context=None, target=None):
             )
             set_cutter(obj, None, None)
     elif kind == 'FREEHAND' and len(pts) >= 3:
-        # the rim is re-checked against the model on the full rebuild; a drag keeps up
+        # the skirt is measured against the model on the full rebuild; a drag keeps up
         # with the mouse instead, and the drag ends in a full rebuild anyway
         margin = 0.0 if draft else float(obj.get("esp_margin", 0.0))
         world = [obj.matrix_basis @ p for p in pts]
-        verts, faces = loop_surface(context, target, world, detail, margin, passes=6 if draft else None)
+        verts, faces, cutter = loop_surface(context, target, world, detail, margin, passes=6 if draft else None)
         inv = obj.matrix_basis.inverted_safe()
         verts = [inv @ Vector(v) for v in verts]
+        if not draft:
+            set_cutter(obj, [inv @ Vector(p) for p in cutter[0]] if cutter else None, cutter)
     elif kind == 'STRAIGHT':
         patch = rebuilt_section(obj, context, target)
         if patch is None:
@@ -565,17 +722,23 @@ def rebuilt_section(obj, context, target):
 def set_cutter(obj, local_verts, cutter):
     """Store what the boolean should subtract, in the preview's own space.
 
-    Only a surface whose own rim would sit on the model needs one - a plane cut's
-    section and a curve cut's silhouette hugging ribbon. A freehand loop is drawn a
-    little outside the surface already, so it subtracts what it shows.
+    Only a surface whose own rim would sit on the model needs one: a plane cut's
+    section, a curve cut's silhouette hugging ribbon, and a freehand loop, whose
+    membrane ends on the line drawn on the surface and whose cutter is that membrane
+    with a skirt past the rim. Faces are stored triangulated, whatever they were.
     """
     if not local_verts or cutter is None:
-        for key in ("esp_cutter", "esp_cutter_f"):
+        for key in ("esp_cutter", "esp_cutter_f", "esp_cutter_n"):
             if key in obj:
                 del obj[key]
         return
+    tris = []
+    for f in cutter[1]:
+        for k in range(1, len(f) - 1):
+            tris.extend((f[0], f[k], f[k + 1]))
     obj["esp_cutter"] = [c for p in local_verts for c in p]
-    obj["esp_cutter_f"] = [i for f in cutter[1] for i in f]
+    obj["esp_cutter_f"] = tris
+    obj["esp_cutter_n"] = 3
 
 
 def cutter_world_patch(obj):
@@ -583,16 +746,17 @@ def cutter_world_patch(obj):
 
     A plane cut hands the boolean a quad and a curve cut a ribbon at one depth, both
     reaching past the model instead of stopping on it; see `section.clip_rect` for why
-    a rim on the surface is the thing to avoid. A freehand loop, and any surface built
-    by the fallbacks, subtracts exactly what it shows.
+    a rim on the surface is the thing to avoid. A freehand loop hands it the membrane
+    plus its skirt. A surface built by the fallbacks subtracts exactly what it shows.
     """
     flat_co = list(obj.get("esp_cutter", []))
-    quads = list(obj.get("esp_cutter_f", []))
-    if len(flat_co) < 12 or len(quads) < 4:
+    flat_f = list(obj.get("esp_cutter_f", []))
+    n = int(obj.get("esp_cutter_n", 4))  # plans saved before the skirt stored quads
+    if len(flat_co) < 9 or len(flat_f) < n:
         return surface_world_patch(obj)
     mw = obj.matrix_basis
     verts = [mw @ Vector(flat_co[i : i + 3]) for i in range(0, len(flat_co) - 2, 3)]
-    faces = [tuple(quads[i : i + 4]) for i in range(0, len(quads) - 3, 4)]
+    faces = [tuple(flat_f[i : i + n]) for i in range(0, len(flat_f) - n + 1, n)]
     return verts, faces
 
 
@@ -663,9 +827,9 @@ def contact_frame(
     face (a fallback rectangle, an untrimmed ribbon) says nothing about where the
     material is, and the ray based estimate is still the best available.
 
-    `shrink` comes off the diameter: a freehand loop is drawn a hair outside the model
-    so its rim clears the surface, and that hair would otherwise be measured as
-    material the pin could grow into.
+    `shrink` comes off the diameter, for a face that is known to reach a little past
+    the material. No surface needs it today: a freehand membrane ends on the loop
+    drawn on the surface, and its clearance lives in a separate cutter.
     """
     if is_cut_face:
         normal = surfaces.patch_normal(verts, faces)
@@ -816,7 +980,6 @@ def add_record(context, target, cut_type, contacts):
                 data.through,
                 data.center_hint,
                 data.is_cut_face,
-                data.margin * 2.0,
             )
             _set_contact_attr(rec, "center", i, center)
             _set_contact_attr(rec, "normal", i, normal)
@@ -944,7 +1107,6 @@ def refresh_record_frames(context, rec):
                 through,
                 hint,
                 bool(sobj.get("esp_cut_face", False)),
-                float(sobj.get("esp_margin", 0.0)) * 2.0,
             )
         except Exception:
             continue
@@ -1079,7 +1241,6 @@ def quick_spec(context, target, contacts):
                 data.through,
                 data.center_hint,
                 data.is_cut_face,
-                data.margin * 2.0,
             )
             w, h = contact_size_bu(context, settings, inscribed)
             pm = connectors.connector_matrix(center, cutting.protrude_direction(normal, settings.pin_side), w, h)

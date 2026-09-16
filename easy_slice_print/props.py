@@ -262,7 +262,8 @@ class ESP_Settings(bpy.types.PropertyGroup):
             "surfaces are sized to the stroke, not to the whole model, so a cut only touches "
             "what you marked - raise this if a cut fails to separate the part. A Curve cut "
             "reads it as a fraction of the stroke length, a Freehand loop as a fraction of its "
-            "radius: how far outside the model its rim is pushed. Plane cuts ignore it: their "
+            "radius: how far past the drawn line the cutter reaches. The line itself never "
+            "moves. Plane cuts ignore it: their "
             "surface is the model's own cross section, which already covers exactly the area "
             "being cut through"
         ),
@@ -284,11 +285,12 @@ class ESP_Settings(bpy.types.PropertyGroup):
     surface_detail: IntProperty(
         name="Surface Detail",
         description=(
-            "Spline samples built between two control points. The cut surface is generated at "
-            "this resolution and its inside is relaxed flat, so a Curve or Freehand cut prints "
-            "as smooth as a Plane cut instead of showing the facets of the control polyline. "
-            "Set it to 1 for the raw polyline. A dense freehand loop already carries more "
-            "points than the spline budget, and uses as much of this as fits"
+            "Samples built between two control points. A Curve cut splines its stroke at this "
+            "resolution and a Freehand loop only subdivides its drawn points, so the rim stays "
+            "straight between them and passes through every one; the inside of the surface is "
+            "then relaxed flat, so both print as smooth as a Plane cut instead of showing the "
+            "facets of the control polyline. Set it to 1 for the raw polyline. A dense freehand "
+            "loop already carries more points than the budget, and uses as much of this as fits"
         ),
         default=3,
         min=1,

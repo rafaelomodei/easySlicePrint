@@ -65,7 +65,7 @@ def side_sign(point, bvh):
     return 1 if (point - loc).dot(nor) >= 0.0 else -1
 
 
-def mesh_side(mesh, bvh, samples=600):
+def mesh_side(mesh, bvh, samples=600, floor=0.0):
     """Which side of the cut surface a separated piece came off. -> +1 or -1
 
     One centroid test is enough for a plane cut, whose surface is flat and reaches past
@@ -77,6 +77,9 @@ def mesh_side(mesh, bvh, samples=600):
 
     The vertices sitting ON the new cut face do know, and they are the ones closest to
     the surface, so every vertex votes with a weight that falls off with its distance.
+    Nothing legitimate sits closer than half the kerf, so `floor` (a fraction of it)
+    caps the weight: a couple of boolean slivers lying right on the surface must not
+    outvote a whole cut face.
     """
     verts = mesh.vertices
     n = len(verts)
@@ -89,7 +92,8 @@ def mesh_side(mesh, bvh, samples=600):
         loc, nor, _idx, dist = bvh.find_nearest(p)
         if loc is None:
             continue
-        w = 1.0 / (dist * dist + 1e-6)
+        d = max(dist, floor)
+        w = 1.0 / (d * d + 1e-6)
         total += w if (p - loc).dot(nor) >= 0.0 else -w
     if total == 0.0:
         return side_sign(mesh_utils.mesh_centroid(mesh), bvh)
@@ -214,7 +218,7 @@ def split_mesh_steps(context, mesh, spec):
         bvh = mesh_utils.bvh_from_pydata(c0.verts, c0.faces)
         side_a, side_b = [], []
         for p in orphans:
-            (side_a if mesh_side(p, bvh) > 0 else side_b).append(p)
+            (side_a if mesh_side(p, bvh, floor=spec.gap * 0.25) > 0 else side_b).append(p)
         if not side_a or not side_b:
             raise CutError(still_joined_message(spec))
         out = mesh_utils.join_meshes(side_a, "_esp_part_a"), mesh_utils.join_meshes(side_b, "_esp_part_b")

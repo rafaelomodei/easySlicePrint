@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.5-alpha] - 2026-09-15
+
+### Fixed
+- **A Freehand cut lands on the line you traced, crease and corners included** ([#1]). With
+  *Loop Smoothing* at zero the cut still came out a few millimetres off the stroke and rounded at
+  the corners. Nothing was smoothing it: the rim was being *moved*. It was pushed out along the
+  surface normal by the clearance the boolean needs, splined between the samples, and then lifted
+  clear of the model a second time - and in a crease there are two surfaces to clear, so the push
+  off one landed the point under the other and the lift off that one carried it out of the crease,
+  while the spline bowed outward at every corner. The rim is now exactly the points that were
+  drawn, straight between them, on the surface; the clearance is a skirt past the rim that only the
+  cutter carries, and each skirt vertex finds its own way out - along the surface first, then
+  leaning towards the normal, checked with a ray back at the rim so the skirt never runs through
+  material - after which the skirt is smoothed along the rim so it can never fold into a
+  self-intersecting slab. Where a stroke jumps across a crease in one mouse move, the segment
+  between the two samples is put onto the surface rather than left running through it. Traced
+  along a crease under an overhang, the cut used to sit 0.65 mm below the line and now sits on
+  it; the connector is no longer shrunk by a clearance the face no longer carries. Existing plans
+  pick this up when a loop is opened in *Edit Cut Surface*.
+- **A cut that did separate is no longer voted into one piece by a sliver.** Which side a piece
+  came off is decided by a vote weighted by distance to the cut surface, and a boolean sliver
+  lying right on it could outvote a whole cut face; the weight is now capped at a quarter of the
+  kerf.
+
+[#1]: https://github.com/rafaelomodei/easySlicePrint/issues/1
+
 ## [0.3.4-alpha] - 2026-09-04
 
 ### Changed
@@ -289,7 +315,8 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.4-alpha...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.5-alpha...HEAD
+[0.3.5-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.4-alpha...v0.3.5-alpha
 [0.3.4-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.3-alpha...v0.3.4-alpha
 [0.3.3-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.2-alpha...v0.3.3-alpha
 [0.3.2-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.1-alpha...v0.3.2-alpha

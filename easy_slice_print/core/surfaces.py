@@ -10,11 +10,17 @@ A patch is a simple open mesh given as (verts, faces) in world space:
   * loop_patch    -> freehand cut: a closed loop drawn on the surface, spanned by a
                      relaxed membrane
 
-Both curved patches are built at a higher resolution than the handful of editable
-control points behind them: the control points are put through a centripetal
-Catmull-Rom spline and, for a loop, the interior is relaxed until it is the
-smoothest surface that still ends exactly on the drawn loop. That is what keeps the
-printed cut face flat instead of showing the facets of the polyline.
+A ribbon is built at a higher resolution than the handful of editable control points
+behind it: the control points are put through a centripetal Catmull-Rom spline, so
+the printed cut face is smooth instead of showing the facets of the polyline.
+
+A loop is different. Its control points are every sample the stroke recorded, on the
+surface, and the rim of the membrane runs through them and nowhere else: the segments
+between them are only subdivided, never splined, so a corner drawn sharp stays sharp
+and a point put on a crease stays on the crease. What is relaxed is the inside of the
+membrane, until it is the smoothest surface that still ends exactly on that rim. The
+clearance a boolean needs past the model is not the rim's business either - see
+`with_skirt`, which continues the membrane outward past the rim for the cutter only.
 
 `slab_from_patch` thickens a patch by the cut gap (kerf) into a closed solid
 that is subtracted from the model with a boolean.
@@ -25,7 +31,7 @@ from mathutils import Vector
 
 SURFACE_DETAIL = 3  # spline samples generated per control point segment
 RELAX_PASSES = 40  # membrane relaxation passes for a strongly non planar loop
-MAX_LOOP_SAMPLES = 600  # boundary samples a filled loop is capped to, whatever the settings
+MAX_LOOP_SAMPLES = 600  # rim vertices a filled loop is capped to, whatever the settings
 
 
 # ----------------------------------------------------------------------------
@@ -108,6 +114,42 @@ def dedupe_polyline(points, min_dist):
         if not out or (p - out[-1]).length >= min_dist:
             out.append(Vector(p))
     return out
+
+
+def subdivide_polyline(points, detail, closed=False):
+    """`detail` - 1 extra points on every segment, on the straight line between its ends.
+
+    The polyline itself does not move: every input point is in the output and nothing
+    is added off the segments. It is the resolution a freehand rim gets - enough
+    vertices for the fill and for the skirt to follow the surface between two drawn
+    points, without a spline deciding where the line goes.
+    """
+    pts = [Vector(p) for p in points]
+    m = len(pts)
+    if m < 2 or detail <= 1:
+        return pts
+    out = []
+    for i in range(m if closed else m - 1):
+        a = pts[i]
+        b = pts[(i + 1) % m]
+        for k in range(detail):
+            out.append(a.lerp(b, k / detail))
+    if not closed:
+        out.append(pts[-1])
+    return out
+
+
+def decimate_polyline(points, count):
+    """At most `count` of the input points, evenly spaced, always the points themselves.
+
+    Unlike `resample_polyline` nothing is interpolated: a loop cut down to the budget
+    still runs through points that were drawn, only fewer of them.
+    """
+    pts = [Vector(p) for p in points]
+    m = len(pts)
+    if m <= count or count < 3:
+        return pts
+    return [pts[int(k * m / count)] for k in range(count)]
 
 
 def plane_basis(normal):
@@ -370,41 +412,40 @@ def membrane_fill(points, rings=None, passes=RELAX_PASSES):
 
 
 def loop_boundary(points, detail=SURFACE_DETAIL):
-    """The splined, capped boundary a loop patch is really built on.
+    """The rim a loop patch is really built on: the drawn points, subdivided and capped.
 
-    The control points are not the rim: they are put through a spline first, and a
-    dense loop is capped. Whoever has to answer for where the rim ends up - a freehand
-    cut has to know its rim clears the model - needs these points, not the ones drawn.
+    Every drawn point is on the rim and the rim is straight between them. A spline
+    used to run through the points here, and a centripetal Catmull-Rom does pass
+    through its control points - but between two of them it bows, and at a corner it
+    bows outward on both sides, which on a loop traced along a crease is a cut face
+    that leaves the crease. A freehand loop is the tool for putting the cut exactly
+    where the stroke went, so the segments are only subdivided.
+
+    `detail` is spent on the samples that are there: a sparse loop gets it in full, a
+    dense one gets what fits under the cap, and a loop over the cap keeps a subset of
+    its own points instead of being resampled off them.
     """
     pts = [Vector(p) for p in points]
     if len(pts) < 3:
         raise ValueError("loop needs at least 3 points")
-    # A freehand stroke arrives dense - every point the user drew. Splining that by the
-    # full detail only to resample the result back down to the budget would move the rim
-    # off the points it was drawn through, which is the one thing a traced loop may not
-    # do. So spend the budget on the spline instead: a sparse loop still gets the full
-    # detail, a dense one gets what fits, and neither is decimated afterwards.
+    pts = decimate_polyline(pts, MAX_LOOP_SAMPLES)
     detail = max(1, min(detail, MAX_LOOP_SAMPLES // len(pts)))
-    pts = dedupe_polyline(spline_polyline(pts, detail, closed=True), 1e-9)
+    pts = dedupe_polyline(subdivide_polyline(pts, detail, closed=True), 1e-9)
     if len(pts) < 3:
         raise ValueError("loop is degenerate")
-    if len(pts) > MAX_LOOP_SAMPLES:
-        # the fill grows with the square of the boundary: keep the worst case bounded
-        pts = resample_polyline(pts, MAX_LOOP_SAMPLES, closed=True)
     return pts
 
 
 def loop_patch(points, detail=SURFACE_DETAIL, passes=None, boundary=None):
     """Fill a closed loop with a smooth surface. Returns (verts, faces).
 
-    The loop itself is splined first, so the boundary follows the control points
-    without the corners a hand drawn stroke leaves behind, and the inside is spanned
-    by `membrane_fill`. A loop drawn from one viewpoint comes out as flat as a plane
-    cut; a loop drawn while orbiting - front, far side, back to the front - comes out
-    as a smooth saddle instead of a cone, so the printed faces still mate.
+    The rim is `loop_boundary(points, detail)` - the drawn points and straight segments
+    between them - and the inside is spanned by `membrane_fill`. A loop drawn from one
+    viewpoint comes out as flat as a plane cut; a loop drawn while orbiting - front, far
+    side, back to the front - comes out as a smooth saddle instead of a cone, so the
+    printed faces still mate. The first `len(rim)` vertices are the rim, untouched.
 
-    `boundary` replaces the splined rim with one the caller has already corrected -
-    see `plan.loop_surface`, which pushes it clear of the model.
+    `boundary` replaces that rim with one the caller already has.
     """
     pts = [Vector(p) for p in boundary] if boundary is not None else loop_boundary(points, detail)
     if len(pts) < 3:
@@ -413,6 +454,109 @@ def loop_patch(points, detail=SURFACE_DETAIL, passes=None, boundary=None):
         # a flat loop is already solved by the initial fill; a wrap-around one is not
         passes = max(8, int(round(RELAX_PASSES * min(1.0, 0.2 + loop_flatness(pts) * 4.0))))
     return membrane_fill(pts, passes=passes)
+
+
+def rim_outward(verts, faces, rim):
+    """Unit direction leading out of the patch at each of its first `rim` vertices.
+
+    In the patch's own surface - the tangent plane at the rim vertex - and perpendicular
+    to the rim, pointing away from the interior. It is where the surface would continue
+    if the rim were not the end of it, which is exactly where a skirt has to go.
+    """
+    n = len(verts)
+    links = [set() for _ in range(n)]
+    normals = [Vector((0.0, 0.0, 0.0)) for _ in range(n)]
+    for f in faces:
+        k = len(f)
+        fn = newell_normal([verts[i] for i in f]) * _poly_area(verts, f)
+        for i in range(k):
+            a, b = f[i], f[(i + 1) % k]
+            links[a].add(b)
+            links[b].add(a)
+            normals[a] += fn
+    fallback = newell_normal(verts[:rim])
+    out = []
+    for i in range(rim):
+        p = verts[i]
+        t = verts[(i + 1) % rim] - verts[(i - 1) % rim]
+        nrm = normals[i] if normals[i].length > 1e-12 else fallback
+        d = t.cross(nrm)
+        if d.length < 1e-12:
+            d = fallback.cross(t)
+        if d.length < 1e-12:
+            out.append(Vector((0.0, 0.0, 0.0)))
+            continue
+        d.normalize()
+        inward = Vector((0.0, 0.0, 0.0))
+        for j in links[i]:
+            if j >= rim:
+                inward += verts[j] - p
+        if inward.length < 1e-12:
+            inward = patch_center(verts) - p
+        if d.dot(inward) > 0.0:
+            d = -d
+        out.append(d)
+    return out
+
+
+def unfold_skirt(rim, ring, slope=0.9, passes=60, local=False):
+    """`ring` re-spaced along `rim` until no skirt quad can fold over its neighbour.
+
+    Every skirt vertex is found on its own, and where the rim crosses from one surface
+    onto another - off a limb onto the body, along a crease - two neighbours can be
+    sent out in different directions by more than the distance between them. The
+    quads between them then overlap or turn inside out, the slab built on them is
+    self intersecting, and the boolean leaves the halves joined along the fold.
+
+    The offsets are smoothed along the rim (the rim itself never moves) until no two
+    neighbouring offsets differ by more than `slope` of the rim segment between them,
+    which is what keeps every quad a quad. `local` smooths only the vertices on either
+    side of a segment that still breaks the rule, so the rest of the ring keeps the
+    clearance it has. The skirt is the one part of the cutter that may be smoothed: it
+    is outside the drawn line, and only the boolean ever sees it.
+    """
+    m = len(rim)
+    if m < 3 or len(ring) != m:
+        return [Vector(p) for p in ring]
+    disp = [Vector(ring[i]) - Vector(rim[i]) for i in range(m)]
+    seg = [(Vector(rim[(i + 1) % m]) - Vector(rim[i])).length for i in range(m)]
+    floor = max(sum(seg) / m * 0.1, 1e-9)
+    limit = [slope * max(l, floor) for l in seg]
+    for _ in range(passes):
+        bad = [i for i in range(m) if (disp[(i + 1) % m] - disp[i]).length > limit[i]]
+        if not bad:
+            break
+        if local:
+            touch = {j for i in bad for j in (i, (i + 1) % m)}
+        else:
+            touch = range(m)
+        new = list(disp)
+        for i in touch:
+            new[i] = (disp[(i - 1) % m] + disp[(i + 1) % m]) * 0.25 + disp[i] * 0.5
+        disp = new
+    return [Vector(rim[i]) + disp[i] for i in range(m)]
+
+
+def with_skirt(verts, faces, rim, ring):
+    """The patch continued past its rim to `ring`, one vertex per rim vertex.
+
+    This is the cutter a freehand loop hands the boolean. The membrane ends exactly
+    on the drawn loop, which is on the model's surface - and a slab whose wall stands
+    on the surface is the one thing an exact boolean cannot resolve: the two halves
+    stay welded along it. The skirt carries the slab out into free air without moving
+    the rim, so the cut face still ends on the line that was drawn and the boolean
+    still gets a wall it can cut with. Returns a new (verts, faces).
+    """
+    if len(ring) != rim:
+        raise ValueError("skirt needs one vertex per rim vertex")
+    out_v = [Vector(v) for v in verts] + [Vector(p) for p in ring]
+    base = len(verts)
+    out_f = [tuple(f) for f in faces]
+    for i in range(rim):
+        j = (i + 1) % rim
+        # winding opposite to the fill's (rim i -> i+1), so the skirt faces the same way
+        out_f.append((j, i, base + i, base + j))
+    return out_v, out_f
 
 
 def patch_normal(verts, faces):

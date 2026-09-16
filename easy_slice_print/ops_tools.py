@@ -710,27 +710,31 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
         locs = [l for l, _n in self.loop]
         centroid = sum(locs, Vector((0.0, 0.0, 0.0))) / len(locs)
         margin = plan.loop_margin(context, src, locs, self.diag)
-        pts = [l + n * margin for l, n in self.loop]
-        pts = surfaces.dedupe_polyline(pts, self.diag * 0.002)
+        # The control points are the points that were drawn, where they were drawn: on
+        # the surface. Nothing pushes them off it any more - the push along the normal
+        # that used to lift the rim clear of the model, followed by a second lift after
+        # the spline, is what carried a loop traced along a crease out of the crease
+        # (in a crease the two lifts bounce the point between the faces that meet
+        # there). The clearance the boolean needs is a skirt past the rim now, and it
+        # lives in the cutter only; see `plan.loop_surface`.
+        #
+        # No resample to a fixed count and no smoothing by default either. A freehand
+        # loop is the tool for tracing a detail - a groove, an ear, the line where two
+        # shapes meet - so 50 samples stay 50, 300 stay 300, and the cut face runs
+        # through them. Control Points sizes a Curve cut; forcing a loop down to 20 of
+        # them moved the rim by millimetres and rounded off the very detail the loop
+        # was drawn to catch.
+        pts = surfaces.dedupe_polyline(locs, self.diag * 0.002)
         if len(pts) < 3:
             self.report({'WARNING'}, "Loop too small")
             self.reset_stroke()
             return None
-        # No resample to a fixed count and no smoothing by default. A freehand loop is
-        # the tool for tracing a detail - a groove, an ear, the line where two shapes
-        # meet - so its control points are the points that were drawn: 50 samples stay
-        # 50, 300 stay 300, and the cut face runs through them. Control Points sizes a
-        # Curve cut; forcing a loop down to 20 of them moved the rim by millimetres and
-        # rounded off the very detail the loop was drawn to catch.
         pts = surfaces.smooth_polyline(pts, settings.loop_smoothing, closed=True)
         n = surfaces.newell_normal(pts)
         if n.z < -1e-6 or (abs(n.z) <= 1e-6 and n.x < 0):
             pts.reverse()
-        # the spline between the points can still cut a corner back into the material;
-        # the membrane is built on a rim measured against the model after it
-        pts = plan.clear_of_model(context, self.target, pts, margin)
         try:
-            verts, faces = plan.loop_surface(context, self.target, pts, settings.surface_detail, margin)
+            verts, faces, cutter = plan.loop_surface(context, self.target, pts, settings.surface_detail, margin)
         except ValueError as e:
             self.report({'WARNING'}, f"Could not fill the loop: {e}")
             self.reset_stroke()
@@ -740,9 +744,10 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
         data.margin = margin
         data.detail = settings.surface_detail
         data.verts, data.faces = verts, faces
-        # the loop was drawn on the model and pushed a hair outside it, so the membrane
-        # it spans is the printed cut face: its own outline is where the material ends,
-        # which is exactly what the connector needs to be measured against
+        data.cutter = cutter
+        # the membrane ends on the loop drawn on the model, so it is the printed cut
+        # face: its own outline is where the material ends, which is exactly what the
+        # connector needs to be measured against
         data.is_cut_face = True
         data.center_hint = centroid
         data.anchor = locs[0]

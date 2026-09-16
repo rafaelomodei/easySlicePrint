@@ -57,25 +57,44 @@ easy_slice_print/
      range for the whole ribbon, taken from the furthest hit anywhere under the stroke, is what
      used to make a curve across a figure's near arm reach through the body behind it;
    * freehand: the loop drawn on the surface (over as many strokes and viewpoints as needed —
-     samples are stored in world space, so orbiting between strokes keeps the loop), pushed
-     outward along the surface normals - which is also what keeps its rim off the model, so it
-     needs no separate cutter - splined, and spanned by a relaxed
-     membrane (`surfaces.loop_patch` → `surfaces.membrane_fill`: concentric rings closed
-     by a centre vertex, then the interior vertices are iterated onto the average of their
-     neighbours with the boundary pinned). The fixed point of that iteration is the discrete
-     minimal surface through the drawn loop: dead flat for a loop drawn from one viewpoint,
-     a smooth saddle for a loop that wraps around the model. Nothing but a straight polyline is
-     ever handed to the boolean, which is what keeps the printed cut face from showing facets.
+     samples are stored in world space, so orbiting between strokes keeps the loop), spanned by
+     a relaxed membrane (`surfaces.loop_patch` → `surfaces.membrane_fill`: concentric rings
+     closed by a centre vertex, then the interior vertices are iterated onto the average of
+     their neighbours with the boundary pinned). The fixed point of that iteration is the
+     discrete minimal surface through the drawn loop: dead flat for a loop drawn from one
+     viewpoint, a smooth saddle for a loop that wraps around the model. Nothing but a straight
+     polyline is ever handed to the boolean, which is what keeps the printed cut face from
+     showing facets.
 
-     Unlike a curve, a freehand loop is **not** resampled to *Control Points* and is not
-     smoothed by default: it is the tool for tracing a detail, so its control points are the
-     points that were drawn, however many that is (`loop_smoothing` defaults to 0, and
-     `surfaces.loop_boundary` spends what is left of its sample budget on the spline instead of
-     splining and then decimating). What is left between the stroke and the cut face is the
-     outward push, `plan.loop_margin` — every millimetre of it moves the cut off the traced
-     line, so it is kept as small as the *classification* in step 3 tolerates, not as small as
-     the boolean does: a loop at a hip junction separates cleanly at 0.8 mm but every loose
-     piece then votes to the same side of a membrane that local.
+     Unlike a curve, a freehand loop is **not** resampled to *Control Points*, not smoothed by
+     default and not splined: it is the tool for tracing a detail, so its rim is the points that
+     were drawn, where they were drawn, with straight segments between them
+     (`surfaces.loop_boundary`; `loop_smoothing` defaults to 0, and a loop over the sample cap
+     keeps a subset of its own points rather than being resampled off them). The rim is on the
+     model's surface, and a slab whose wall stands on the surface is the one thing an exact
+     boolean cannot resolve, so — like the plane and the curve — the loop hands the boolean a
+     separate cutter: the membrane continued past its rim by `plan.loop_margin` into free air
+     (`plan.skirt_ring` → `surfaces.with_skirt`). Each skirt vertex tries the membrane's own
+     direction first, then leans towards the surface normal, and is checked with a ray back at
+     the rim so the skirt never runs through material — the way out of a crease is along the
+     crease's wedge of air, not through the hem above it. Found one vertex at a time the
+     offsets jump between neighbours (from one surface to the next, and from one facet of the
+     model to the next), and a jump larger than the rim spacing folds the skirt into a
+     self-intersecting slab, so the offsets are smoothed along the rim until no quad can fold
+     (`surfaces.unfold_skirt`), grown along their own direction until they clear the model
+     again, and smoothed locally once more. Between two drawn points the rim is straight, and
+     where a stroke jumped across a junction that straight segment runs through the material:
+     `plan.settle_on_model` casts those points out along the two drawn normals' average, onto
+     the surface, before the membrane is filled. The rim used to be pushed out by the margin
+     instead, which is what put a traced cut millimetres off its line (issue #1). The margin
+     is kept as small as the *classification* in step 3 tolerates, not as small as the boolean
+     does: a loop at a hip junction separates cleanly at 0.8 mm but every loose piece then
+     votes to the same side of a membrane that local.
+
+     What the membrane cannot do: a loop that folds back on itself into a limb — down one side
+     of a leg and up the other in a narrow tongue — is not star shaped, and `membrane_fill`'s
+     rings shrinking towards the centroid cross each other in the tongue. The old rim push
+     did not survive that either.
 2. **Kerf slab** — the patch is thickened by *Cut Gap* along its vertex normals into a closed
    solid (`surfaces.slab_from_patch`).
 3. **Split** — `model − slab` (Boolean modifier, *Manifold* solver when available, *Exact*

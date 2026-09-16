@@ -272,19 +272,103 @@ def test_freehand_connector_fits_the_loop():
     bpy.context.scene.collection.objects.link(rod)
     bpy.context.view_layer.update()
 
-    margin = 0.6  # what the tool pushes the drawn loop out by, so its rim clears the model
+    # the loop as the tool keeps it: on the surface, where it was drawn
     pts = []
     for i in range(40):
         ang = 2.0 * math.pi * i / 40
         nrm = Vector((math.cos(ang), math.sin(ang), 0.0))
-        pts.append(nrm * (12.0 + margin) + Vector((0.0, 0.0, 6.0 * math.cos(ang))))
+        pts.append(nrm * 12.0 + Vector((0.0, 0.0, 6.0 * math.cos(ang))))
     verts, faces = surfaces.loop_patch(pts, detail=3)
 
     centre, _normal, inscribed = plan.contact_frame(
-        bpy.context, rod, verts, faces, center_hint=Vector((0, 0, 0)), is_cut_face=True, shrink=margin * 2.0
+        bpy.context, rod, verts, faces, center_hint=Vector((0, 0, 0)), is_cut_face=True
     )
-    check(abs(inscribed - 24.0) < 1.0, f"pin sized to the rod, not to the loop's clearance ({inscribed:.2f} ~ 24)")
+    check(abs(inscribed - 24.0) < 1.0, f"pin sized to the rod ({inscribed:.2f} ~ 24)")
     check(centre.xy.length < 1.0, f"and placed in the middle of the cut face ({centre})")
+
+
+def freehand_contact(obj, height=5.0, tilt=3.0, samples=96):
+    """The contact `ESP_OT_cut_freehand.close_loop` produces for a slanted loop round `obj`."""
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    diag = mesh_utils.object_world_diagonal(obj)
+    locs = []
+    for k in range(samples):
+        a = 2.0 * math.pi * k / samples
+        d = Vector((math.cos(a), math.sin(a), 0.0))
+        aim = Vector((0.0, 0.0, height + tilt * math.cos(a)))
+        hit, loc, _n, _d = mesh_utils.object_ray_cast(obj, aim + d * diag, -d, depsgraph, max_dist=diag * 4.0)
+        if hit:
+            locs.append(loc)
+    settings = bpy.context.scene.esp
+    margin = plan.loop_margin(bpy.context, settings, locs, diag)
+    verts, faces, cutter = plan.loop_surface(bpy.context, obj, locs, settings.surface_detail, margin)
+    d = plan.ContactData('FREEHAND')
+    d.points = locs
+    d.margin = margin
+    d.detail = settings.surface_detail
+    d.verts, d.faces = verts, faces
+    d.cutter = cutter
+    d.is_cut_face = True
+    d.center_hint = Vector((0.0, 0.0, height))
+    d.anchor = locs[0]
+    return d
+
+
+def wall_z(obj, x_sign):
+    """The z range of the part's wall at x = +-10 (the loop is at z = 8 there, and 2 on the far side)."""
+    zs = [v.co.z for v in obj.data.vertices if v.co.x * x_sign > 9.5 and abs(v.co.y) < 1.0]
+    return min(zs), max(zs)
+
+
+def test_freehand_cut_lands_on_the_loop():
+    """Quick and Plan mode both cut a freehand loop where it was drawn, through the cutter."""
+    print("== a freehand loop cuts on its line in quick mode and in the plan")
+    sc = reset_scene()
+    obj = make_cylinder("Loop")
+    s = sc.esp
+    s.mode = 'QUICK'
+    s.add_pin = False
+    from easy_slice_print.ops_tools import quick_cut
+
+    d = freehand_contact(obj)
+    check(d.cutter is not None and len(d.cutter[0]) > len(d.verts), "the contact carries a cutter with a skirt")
+    a, b, _secs = quick_cut(bpy.context, obj, [d])
+    check({a.name, b.name} == {"Loop_UPPER", "Loop_LOWER"}, f"quick freehand names {a.name}/{b.name}")
+    lower = a if a.name.endswith("LOWER") else b
+    upper = b if lower is a else a
+    top_near, top_far = wall_z(lower, 1)[1], wall_z(lower, -1)[1]
+    bot_near, bot_far = wall_z(upper, 1)[0], wall_z(upper, -1)[0]
+    print(f"  lower ends at z={top_near:.2f}/{top_far:.2f}, upper starts at z={bot_near:.2f}/{bot_far:.2f}")
+    check(abs(top_near - 7.9) < 0.2 and abs(top_far - 1.9) < 0.2, "the lower part ends on the slanted line")
+    check(abs(bot_near - 8.1) < 0.2 and abs(bot_far - 2.1) < 0.2, "and the upper part starts on it")
+
+    sc = reset_scene()
+    obj = make_cylinder("Planned")
+    s = sc.esp
+    s.mode = 'PLAN'
+    s.keep_original = True
+    ctx = bpy.context
+    plan.add_record(ctx, obj, 'FREEHAND', [freehand_contact(obj)])
+    rec = s.cuts[-1]
+    sobj = bpy.data.objects.get(rec.surface_a)
+    check(sobj is not None and int(sobj.get("esp_cutter_n", 0)) == 3, "the plan stores the cutter triangulated")
+    shown = plan.surface_world_patch(sobj)
+    cut_v, cut_f = plan.cutter_world_patch(sobj)
+    check(len(cut_v) > len(shown[0]) and all(len(f) == 3 for f in cut_f), "and reads it back as membrane plus skirt")
+    rim = plan.surface_points(sobj)
+    depsgraph = ctx.evaluated_depsgraph_get()
+    drawn = max(abs(mesh_utils.object_surface_depth(obj, sobj.matrix_world @ p, depsgraph)[3]) for p in rim)
+    check(drawn < 1e-3, f"the stored control points sit on the surface ({drawn:.4f} mm)")
+    plan.rebuild_surface(sobj, context=ctx, target=obj)
+    again = plan.cutter_world_patch(sobj)
+    check(len(again[0]) == len(cut_v), "a rebuild keeps the skirt on the cutter")
+    res = bpy.ops.esp.build()
+    col = bpy.data.collections.get(s.built_collection)
+    check(res == {'FINISHED'} and col is not None and len(col.objects) == 2, "the plan builds two parts from it")
+    if col is not None and len(col.objects) == 2:
+        lower = min(col.objects, key=lambda o: world_bounds(o)[0].z)
+        top_near, top_far = wall_z(lower, 1)[1], wall_z(lower, -1)[1]
+        check(abs(top_near - 7.9) < 0.2 and abs(top_far - 1.9) < 0.2, "and the built part ends on the drawn line")
 
 
 def test_printer_fit():
@@ -597,6 +681,7 @@ if __name__ == "__main__":
     test_printer_fit()
     test_curve_cut_stops_at_the_model()
     test_freehand_connector_fits_the_loop()
+    test_freehand_cut_lands_on_the_loop()
     test_plane_section_preview()
     test_unregister()
     print(f"\n{len(FAILS)} failure(s)")

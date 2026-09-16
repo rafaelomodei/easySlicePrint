@@ -4,7 +4,7 @@
 
 import bpy
 
-from . import plan
+from . import overlay, plan
 from .ops_plan import active_record
 from .version import STAGE, VERSION
 
@@ -61,6 +61,18 @@ class ESP_PT_main(ESPPanel, bpy.types.Panel):
             layout.label(text=f"Target: {target.name}", icon='OBJECT_DATA')
         if s.last_message:
             layout.label(text=s.last_message, icon='INFO')
+        shown = overlay.shown()
+        if shown is not None:
+            box = layout.box()
+            row = box.row(align=True)
+            title = f"Why '{shown.label}' failed" if shown.label else "Why the cut failed"
+            row.label(text=title, icon='COLORSET_01_VEC')
+            row.operator("esp.hide_diagnosis", text="", icon='X', emboss=False)
+            if shown.cut:
+                box.label(text="Red: the halves stay joined here", icon='DOT')
+                box.label(text="Green: the cut goes through", icon='DOT')
+            else:
+                box.label(text="Red: none of the surface cuts the model", icon='DOT')
 
 
 class ESP_PT_tools(ESPPanel, bpy.types.Panel):
@@ -173,6 +185,7 @@ class ESP_PT_options(ESPPanel, bpy.types.Panel):
         row = layout.row()
         row.active = s.mode == 'PLAN'
         row.prop(s, "skip_failed")
+        layout.prop(s, "diagnose_failed")
 
 
 class ESP_PT_remesh(ESPPanel, bpy.types.Panel):

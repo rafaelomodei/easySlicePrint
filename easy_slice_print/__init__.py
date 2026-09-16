@@ -5,9 +5,9 @@
 Free software under the GNU General Public License v3.0 or later.
 """
 
-from . import ops_misc, ops_plan, ops_tools, plan, prefs, props, ui
+from . import ops_misc, ops_plan, ops_tools, overlay, plan, prefs, props, ui
 
-MODULES = (props, prefs, plan, ops_tools, ops_plan, ops_misc, ui)
+MODULES = (props, prefs, plan, overlay, ops_tools, ops_plan, ops_misc, ui)
 
 
 def register():

@@ -110,6 +110,12 @@ and is still going through the platform's review, so until it is approved use th
    halves are still joined through those, so draw across them as well. Move or rotate the
    preview in Plan Mode and the section is taken again wherever it lands.
 
+   Whatever the tool, a cut that leaves the part in one piece also *shows* you where: the cut
+   surface is painted red where the two halves are still joined, orange around it and green
+   where the cut is going through — all red when none of it reaches the model. Fix the cut
+   with the map in view; it goes away with the next build, or with the **✕** next to it in the
+   sidebar.
+
    A **Curve** cut follows the model the same way: every point along the stroke goes exactly as
    deep as the material under it, and only through the run of material the stroke is standing on
    — draw across a figure's near arm and the body behind it is left alone. A stroke that runs off

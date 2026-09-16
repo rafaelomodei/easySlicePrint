@@ -1206,6 +1206,7 @@ def record_spec(context, rec, settings, remesh=True):
                 custom,
                 pin_mesh=pin_unit_mesh(pin) if pm is not None else None,
                 regions_skipped=int(sobj.get("esp_skipped", 0)),
+                preview=surface_world_patch(sobj),
             )
         )
     u = mm(context)
@@ -1220,6 +1221,7 @@ def record_spec(context, rec, settings, remesh=True):
         remesh_voxel=settings.remesh_voxel_mm * u,
         remesh_adaptivity=settings.remesh_adaptivity,
         remesh_smooth=settings.remesh_smooth,
+        diagnose=settings.diagnose_failed,
     )
 
 
@@ -1246,7 +1248,16 @@ def quick_spec(context, target, contacts):
             pm = connectors.connector_matrix(center, cutting.protrude_direction(normal, settings.pin_side), w, h)
         verts, faces = data.cutter if data.cutter is not None else (data.verts, data.faces)
         specs.append(
-            cutting.ContactSpec(verts, faces, settings.add_pin, pm, shape, custom, regions_skipped=data.regions_skipped)
+            cutting.ContactSpec(
+                verts,
+                faces,
+                settings.add_pin,
+                pm,
+                shape,
+                custom,
+                regions_skipped=data.regions_skipped,
+                preview=(data.verts, data.faces),
+            )
         )
     u = mm(context)
     return cutting.CutSpec(
@@ -1256,6 +1267,7 @@ def quick_spec(context, target, contacts):
         tip_extra=(settings.tip_extra_mm * u) if settings.asymmetric else 0.0,
         pin_side=settings.pin_side,
         solver=pref(context, "solver", 'AUTO'),
+        diagnose=settings.diagnose_failed,
     )
 
 

@@ -9,13 +9,14 @@ import time
 
 import bmesh
 import bpy
+import numpy as np
 from mathutils import Matrix, Vector
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import easy_slice_print  # noqa: E402
 from easy_slice_print import plan  # noqa: E402
-from easy_slice_print.core import connectors, cutting, mesh_utils, section, surfaces  # noqa: E402
+from easy_slice_print.core import connectors, cutting, diagnosis, mesh_utils, section, surfaces  # noqa: E402
 
 easy_slice_print.register()  # the freehand tests read the addon's own settings
 
@@ -1073,6 +1074,89 @@ def test_section_reports_regions_it_left_out():
     check(abs(kept - vol0) / vol0 < 0.02, f"volume preserved ({kept:.0f} of {vol0:.0f})")
 
 
+def test_diagnosis_finds_where_the_halves_stay_joined():
+    print("== a cut that did not split the part says where it stays joined")
+    # the saint again: the torso is cut, and the sword is what keeps the halves together
+    reset_scene()
+    saint = make_saint()
+    dg = bpy.context.evaluated_depsgraph_get()
+    co, no, x = Vector((0, 0, 0)), Vector((0, 0, 1)), Vector((1, 0, 0))
+    torso = section.plane_section(saint, co, no, span=(x, -18.0, 18.0), margin=0.3, depsgraph=dg)
+    cut = torso.cutter or (torso.verts, torso.faces)
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(cut[0], cut[1], add_pin=False, regions_skipped=1)], gap=0.17)
+    d = None
+    try:
+        cutting.perform_cut(bpy.context, saint, spec, ("A", "B"), out_collection("saint"))
+    except cutting.CutError as e:
+        d = e.diagnosis
+    check(d is not None and d.cut, "the failed cut carries a diagnosis, and the cutter did carve the torso")
+    check(d.seeds[0] > 0 and d.seeds[1] > 0, f"cut faces found on both sides of the plane {d.seeds}")
+    on_sword = [b for b in d.bridge if 30.0 < b.x < 40.0]
+    check(len(on_sword) == len(d.bridge) > 0, f"every bridge point is on the sword ({len(on_sword)}/{len(d.bridge)})")
+    on_sword, on_torso = d.score_points([Vector((35.0, 0.0, 0.0)), Vector((0.0, 0.0, 0.0))])
+    check(on_sword < 0.5 and on_torso > 0.9, f"red on the sword ({on_sword:.2f}), green on the torso ({on_torso:.2f})")
+    check(min(d.score_points(cut[0])) > 0.9, "the cut surface is all green: the problem is not on it")
+    check(d.surface[0] is not cut[0] and len(d.surface[0]) == len(cut[0]), "with no preview, the cutter is painted")
+    # the plan shows the section, not the quad the boolean gets: the section is what is painted
+    reset_scene()
+    saint = make_saint()
+    spec = cutting.CutSpec(
+        contacts=[cutting.ContactSpec(cut[0], cut[1], add_pin=False, preview=(torso.verts, torso.faces))], gap=0.17
+    )
+    try:
+        cutting.perform_cut(bpy.context, saint, spec, ("A", "B"), out_collection("saint2"))
+    except cutting.CutError as e:
+        d = e.diagnosis
+    check(len(d.surface[0]) == len(torso.verts) and len(d.surface[0]) != len(cut[0]), "with a preview, that is painted")
+
+    # a slot that stops half way through a cylinder: the end wall is where the halves meet
+    reset_scene()
+    cyl = make_cylinder()
+    verts, faces = surfaces.rect_patch(Vector((-10, 0, 5)), Vector((0, 0, 1)), Vector((1, 0, 0)), 10.0, (-30.0, 30.0))
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2)
+    d = None
+    try:
+        cutting.perform_cut(bpy.context, cyl, spec, ("A", "B"), out_collection("half"))
+    except cutting.CutError as e:
+        d = e.diagnosis
+    check(d is not None and d.cut, "the half slot is diagnosed")
+    check(min(b.x for b in d.bridge) > -0.5, f"the bridge is the uncut half (x from {min(b.x for b in d.bridge):.1f})")
+    end, deep = d.score_points([Vector((0.0, 0.0, 5.0)), Vector((-15.0, 0.0, 5.0))])
+    check(
+        end < 0.3 and deep > 0.9,
+        f"the cutter is red where it stops in the material ({end:.2f}) and green where it cut ({deep:.2f})",
+    )
+
+    # a cutter that never reaches the model: nothing cut, all of the surface is the problem
+    reset_scene()
+    cyl = make_cylinder()
+    verts, faces = surfaces.plane_patch(Vector((0, 0, 80)), Vector((0, 0, 1)), Vector((1, 0, 0)), 50.0)
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2)
+    d = None
+    try:
+        cutting.perform_cut(bpy.context, cyl, spec, ("A", "B"), out_collection("miss"))
+    except cutting.CutError as e:
+        d = e.diagnosis
+    check(d is not None and not d.cut and not d.bridge, "a cutter off the model: nothing was cut")
+    check(max(d.score_points(verts)) == 0.0, "and the whole cut surface is red")
+
+    # the work can be declined
+    reset_scene()
+    cyl = make_cylinder()
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2, diagnose=False)
+    try:
+        cutting.perform_cut(bpy.context, cyl, spec, ("A", "B"), out_collection("quiet"))
+        check(False, "the cut off the model still fails")
+    except cutting.CutError as e:
+        check(e.diagnosis is None, "with diagnose off the error carries no map")
+
+    # a graph with two seeds and a bridge, without a boolean: the flood meets in the middle
+    labels = diagnosis._flood(np.array([1, 0, 0, 0, -1], dtype=np.int8), np.array([[0, 1], [1, 2], [2, 3], [3, 4]]))
+    check(
+        list(labels) in ([1, 1, 1, -1, -1], [1, 1, -1, -1, -1]), f"fronts meet in the middle of a chain {list(labels)}"
+    )
+
+
 def test_connector_fits_the_section():
     print("== the connector is the biggest circle that fits in the section")
     reset_scene()
@@ -1171,6 +1255,7 @@ if __name__ == "__main__":
     test_section_cut_leaves_the_other_leg()
     test_section_follows_the_stroke()
     test_section_reports_regions_it_left_out()
+    test_diagnosis_finds_where_the_halves_stay_joined()
     test_connector_fits_the_section()
     test_runs_and_bands()
     test_ribbon_follows_a_silhouette()

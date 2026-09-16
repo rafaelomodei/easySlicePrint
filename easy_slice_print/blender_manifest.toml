@@ -1,14 +1,14 @@
 schema_version = "1.0.0"
 
 id = "easy_slice_print"
-version = "0.3.4-alpha"
+version = "0.3.5-alpha"
 name = "EasySlice Print"
 tagline = "Non-destructive model splitting and connectors for 3D printing"
 maintainer = "Rafael Omodei"
 type = "add-on"
 
 website = "https://github.com/rafaelomodei/easySlicePrint"
-tags = ["Mesh", "Object", "3D View"]
+tags = ["Mesh", "Object"]
 
 blender_version_min = "4.2.0"
 

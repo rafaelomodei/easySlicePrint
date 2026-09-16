@@ -210,12 +210,12 @@ class ESP_OT_edit_surface(bpy.types.Operator):
             state = plan.ensure_evaluable(self.target)
             try:
                 depsgraph = context.evaluated_depsgraph_get()
-                hit, loc, nor, _d = mesh_utils.object_ray_cast(self.target, origin, direction, depsgraph)
+                hit, loc, _nor, _d = mesh_utils.object_ray_cast(self.target, origin, direction, depsgraph)
             finally:
                 plan.restore_visibility(self.target, state)
             if hit:
-                if self.closed:
-                    return loc + nor * float(self.sobj.get("esp_margin", 0.0))
+                # a freehand point goes where it was put, on the surface; the cutter's
+                # clearance is a skirt past the rim, not a push on the point
                 return loc
         return view3d_utils.region_2d_to_location_3d(self.region, self.rv3d, coord, fallback_world)
 

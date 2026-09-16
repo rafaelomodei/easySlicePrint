@@ -265,7 +265,7 @@ def test_smooth_surfaces():
     check(abs(verts[-1].z) < 0.5, f"no centroid spike (centre z {verts[-1].z:.2f})")
 
     # the drawn loop itself is never moved
-    src = surfaces.dedupe_polyline(surfaces.spline_polyline(saddle, surfaces.SURFACE_DETAIL, closed=True), 1e-9)
+    src = surfaces.loop_boundary(saddle)
     check(max((verts[i] - src[i]).length for i in range(len(src))) < 1e-9, "boundary vertices stay on the drawn loop")
 
 
@@ -394,11 +394,35 @@ def _figure_with_limbs():
     return obj
 
 
-def _traced_loop(obj, centre, axis, radius, samples=100, wobble=0.05, shape=None):
+def _hemmed_body():
+    """A body under an overhanging hem: the crease a freehand loop gets traced along."""
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=True, segments=64, radius1=10.0, radius2=10.0, depth=41.0)
+    bmesh.ops.translate(bm, vec=(0.0, 0.0, -19.5), verts=bm.verts)  # z -40 .. +1, into the hem
+    body = make_object("body", bm)
+    bm = bmesh.new()
+    bmesh.ops.create_cone(bm, cap_ends=True, cap_tris=True, segments=64, radius1=13.0, radius2=13.0, depth=12.0)
+    bmesh.ops.translate(bm, vec=(0.0, 0.0, 6.0), verts=bm.verts)  # z 0 .. 12, 3 mm proud of the body
+    hem = make_object("hem", bm)
+    bpy.context.view_layer.update()
+    me = mesh_utils.world_mesh_copy(bpy.context, body, "w")
+    me = mesh_utils.boolean_mesh(bpy.context, me, mesh_utils.world_mesh_copy(bpy.context, hem, "h"), 'UNION', 'EXACT')
+    mesh_utils.cleanup_temp(bpy.context.scene)
+    for o in (body, hem):
+        mesh_utils.remove_object(o)
+    obj = bpy.data.objects.new("Hemmed", me)
+    bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.update()
+    return obj
+
+
+def _traced_loop(obj, centre, axis, radius, samples=100, wobble=0.05, shape=None, from_inside=False):
     """The samples a freehand stroke records tracing a ring round a limb.
 
     `shape(angle) -> offset along the axis` replaces the default gentle wobble, for a
     stroke that traces a real detail: a step is what a 20 point resample cannot follow.
+    `from_inside` casts each ray out from the centre instead of in from far away, so a
+    ring round one leg never picks up the leg next to it.
     """
     depsgraph = bpy.context.evaluated_depsgraph_get()
     diag = mesh_utils.object_world_diagonal(obj)
@@ -413,20 +437,27 @@ def _traced_loop(obj, centre, axis, radius, samples=100, wobble=0.05, shape=None
         a = 2.0 * math.pi * k / samples
         d = u * math.cos(a) + v * math.sin(a)
         aim = Vector(centre) + Vector(axis).normalized() * shape(a) + d * radius
-        hit, loc, nor, _i = mesh_utils.object_ray_cast(obj, aim + d * diag, -d, depsgraph, max_dist=diag * 4.0)
+        if from_inside:
+            hit, loc, nor, _i = mesh_utils.object_ray_cast(obj, aim - d * radius, d, depsgraph, max_dist=diag * 4.0)
+        else:
+            hit, loc, nor, _i = mesh_utils.object_ray_cast(obj, aim + d * diag, -d, depsgraph, max_dist=diag * 4.0)
         if hit:
-            out.append((loc, nor.normalized()))
+            nor = nor.normalized()
+            out.append((loc, -nor if from_inside and nor.dot(d) < 0.0 else nor))
     return out
 
 
-def _freehand_patch(obj, loop, margin, smoothing=0.0, control_points=None, detail=3, clear=True):
-    """The membrane `close_loop` builds from a recorded stroke.
+def _freehand_patch(obj, loop, margin, smoothing=0.0, control_points=None, detail=3, pushed=False, clear=True):
+    """The membrane `close_loop` builds from a recorded stroke. -> (verts, faces, rim, cutter)
 
-    Defaults mirror the tool: no smoothing, and every drawn point kept. Pass
-    `smoothing=0.35, control_points=20` to get the eroding pipeline this replaced.
+    Defaults mirror the tool: the drawn points, on the surface, no smoothing, every point
+    kept, and the clearance as a skirt on the cutter. `pushed=True` is the pipeline this
+    replaced - the points pushed out along their normals, and with `clear` lifted clear
+    of the model again after the fill - and `smoothing=0.35, control_points=20` the
+    eroding version before that. In those the cutter is the membrane itself.
     """
     diag = mesh_utils.object_world_diagonal(obj)
-    pts = [loc + nor * margin for loc, nor in loop]
+    pts = [loc + nor * margin for loc, nor in loop] if pushed else [loc for loc, _nor in loop]
     pts = surfaces.dedupe_polyline(pts, diag * 0.002)
     pts = surfaces.smooth_polyline(pts, smoothing, closed=True)
     if control_points:
@@ -435,34 +466,45 @@ def _freehand_patch(obj, loop, margin, smoothing=0.0, control_points=None, detai
     if n.z < -1e-6 or (abs(n.z) <= 1e-6 and n.x < 0):
         pts.reverse()
     rim = len(surfaces.loop_boundary(pts, detail))
-    if not clear:
-        verts, faces = surfaces.loop_patch(pts, detail=detail)
-        return verts, faces, rim
-    pts = plan.clear_of_model(bpy.context, obj, pts, margin)
-    verts, faces = plan.loop_surface(bpy.context, obj, pts, detail, margin)
-    return verts, faces, rim
+    if pushed:
+        boundary = None
+        if clear:
+            pts = plan.clear_of_model(bpy.context, obj, pts, margin)
+            boundary = plan.clear_of_model(bpy.context, obj, surfaces.loop_boundary(pts, detail), margin)
+        verts, faces = surfaces.loop_patch(pts, detail=detail, boundary=boundary)
+        return verts, faces, rim, (verts, faces)
+    verts, faces, cutter = plan.loop_surface(bpy.context, obj, pts, detail, margin)
+    return verts, faces, rim, cutter
+
+
+def _depths(obj, points):
+    """Signed distance of each point from the model: outside positive, inside negative."""
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    out = []
+    for p in points:
+        found, loc, _nor, depth = mesh_utils.object_surface_depth(obj, p, depsgraph)
+        if found:
+            dist = (Vector(p) - loc).length
+            out.append(dist if depth >= 0.0 else -dist)
+    return out
 
 
 def _rim_depth(obj, verts, count):
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    out = []
-    for p in verts[:count]:
-        found, _loc, _nor, depth = mesh_utils.object_surface_depth(obj, p, depsgraph)
-        if found:
-            out.append(depth)
+    out = _depths(obj, verts[:count])
     return min(out) if out else 0.0
 
 
 def test_freehand_loop_really_leaves_the_model():
-    """A freehand membrane only cuts if its rim stands clear of the model.
+    """A freehand cutter only cuts if it stands clear of the model - and the rim stays put.
 
     Unlike a plane section or a curve ribbon, the membrane stops on its own rim, so the
-    single thing separating the two halves is how far that rim reaches past the surface.
-    The stroke is pushed out along the surface normal when it is drawn, and the pipeline
-    it then goes through can drag it back: measuring the finished rim against the model
-    is the only check that survives every step of it.
+    single thing separating the two halves is how far the cutter reaches past the
+    surface. That used to be the rim itself, pushed out along the surface normal: the
+    stroke's pipeline could drag it back, and every millimetre it kept was a millimetre
+    the cut had left the traced line. The rim sits on the drawn points now, and the
+    clearance is a skirt past it that only the cutter carries.
     """
-    print("== a freehand loop's rim has to leave the model")
+    print("== a freehand cutter has to leave the model, the rim has to stay")
     reset_scene()
     fig = _figure_with_limbs()
     diag = mesh_utils.object_world_diagonal(fig)
@@ -471,7 +513,7 @@ def test_freehand_loop_really_leaves_the_model():
 
     # what the loop used to get: a fixed 0.6 mm push applied BEFORE a smoothing pass and
     # a resample down to 20 control points, both of which pull the rim back into the model
-    verts, faces, rim = _freehand_patch(fig, loop, 0.6, smoothing=0.35, control_points=20, clear=False)
+    verts, faces, rim, _c = _freehand_patch(fig, loop, 0.6, smoothing=0.35, control_points=20, pushed=True, clear=False)
     sunk = _rim_depth(fig, verts, rim)
     check(sunk < 0.2, f"the old fixed push does not survive the pipeline (rim at {sunk:+.2f} mm)")
     spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2)
@@ -488,10 +530,17 @@ def test_freehand_loop_really_leaves_the_model():
     loop = _traced_loop(fig, Vector((0.0, 0.0, 0.0)), Vector((1.0, 0.0, 0.0)), 14.0)
     margin = plan.loop_margin(bpy.context, settings, [loc for loc, _n in loop], diag)
     check(margin > 0.5, f"the margin is scaled to the loop, not a fixed hair ({margin:.2f} mm)")
-    verts, faces, rim = _freehand_patch(fig, loop, margin)
-    clear = _rim_depth(fig, verts, rim)
-    check(clear > margin * 0.5, f"the corrected rim really stands outside the model ({clear:+.2f} mm)")
-    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2)
+    verts, faces, rim, cutter = _freehand_patch(fig, loop, margin)
+    locs = [loc for loc, _n in loop]
+    drawn = [v for v in verts[:rim] if min((v - l).length for l in locs) < 1e-6]
+    on = max(abs(d) for d in _depths(fig, drawn))
+    check(len(drawn) == len(locs) and on < 1e-3, f"the rim sits on the surface at every drawn point ({on:.4f} mm off)")
+    inside = -min(_depths(fig, verts[:rim]))
+    check(inside < 1e-3, f"and never runs inside the model between them ({inside:.4f} mm at worst)")
+    check(len(cutter[0]) == len(verts) + rim, "the cutter is the membrane plus one skirt vertex per rim vertex")
+    clear = min(_depths(fig, cutter[0][-rim:]))
+    check(clear > margin * 0.5, f"and the skirt really stands outside the model ({clear:+.2f} mm)")
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(*cutter, add_pin=False)], gap=0.2)
     a, b, _s = cutting.perform_cut(bpy.context, fig, spec, ("A", "B"), out_collection("new"))
     check(is_closed_manifold(a.data) and is_closed_manifold(b.data), "and the cut splits it into two solids")
     check(len(a.data.polygons) > 100 and len(b.data.polygons) > 100, "both halves carry real geometry")
@@ -507,10 +556,45 @@ def test_freehand_loop_really_leaves_the_model():
     hip = _traced_loop(fig, Vector((-14.0, -5.0, -12.0)), Vector((0.0, 0.0, 1.0)), 4.5)
     margin = plan.loop_margin(bpy.context, settings, [loc for loc, _n in hip], diag)
     check(margin > 1.2, f"a loop at the hip junction gets more than the 1.2 mm it needs ({margin:.2f} mm)")
-    verts, faces, _rim = _freehand_patch(fig, hip, margin)
-    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2)
+    _v, _f, _rim, cutter = _freehand_patch(fig, hip, margin)
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(*cutter, add_pin=False)], gap=0.2)
     a, b, _s = cutting.perform_cut(bpy.context, fig, spec, ("A", "B"), out_collection("hip"))
     check(is_closed_manifold(a.data) and is_closed_manifold(b.data), "and that cut is reported as the split it is")
+
+    # A stroke that jumps across a crease: traced under an overhanging hem, with one
+    # quadrant of the samples landing on the hem's wall instead. Each jump between the
+    # wall and the body under it is one mouse move, and the straight segment between
+    # the two samples runs through the hem, so the skirt on either side of it leaves by
+    # a different surface. That is where a rim left on the chord, and a skirt found one
+    # vertex at a time, folded - and a folded slab leaves the halves joined.
+    reset_scene()
+    fig = _hemmed_body()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    jump = []
+    for k in range(120):
+        a = 2.0 * math.pi * k / 120
+        d = Vector((math.cos(a), math.sin(a), 0.0))
+        z = 2.0 if 30 <= k < 60 else -0.25
+        origin = Vector((0.0, 0.0, z)) + d * diag
+        hit, loc, nor, _i = mesh_utils.object_ray_cast(fig, origin, -d, depsgraph, max_dist=diag * 4.0)
+        if hit:
+            jump.append((loc, nor.normalized()))
+    check(sum(1 for loc, _n in jump if loc.xy.length > 12.5) == 30, "a quadrant of the stroke is on the hem's wall")
+    margin = plan.loop_margin(bpy.context, settings, [loc for loc, _n in jump], diag)
+    verts, _f, rim, cutter = _freehand_patch(fig, jump, margin)
+    inside = -min(_depths(fig, verts[:rim]))
+    check(inside < 1e-3, f"the rim is put onto the surface where the stroke jumped the crease ({inside:.3f} mm)")
+    ring = cutter[0][-rim:]
+    edge = [(verts[(i + 1) % rim] - verts[i]) for i in range(rim)]
+    folds = sum(1 for i in range(rim) if (ring[(i + 1) % rim] - ring[i]).dot(edge[i]) < 0.0)
+    check(folds == 0, f"and the skirt never folds back on itself ({folds} folded segments)")
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(*cutter, add_pin=False)], gap=0.2)
+    a, b, _s = cutting.perform_cut(bpy.context, fig, spec, ("A", "B"), out_collection("jump"))
+    solid = is_closed_manifold(a.data) and is_closed_manifold(b.data)
+    check(
+        solid and min(len(a.data.polygons), len(b.data.polygons)) > 1000,
+        f"so the cut across the crease splits the part ({len(a.data.polygons)}/{len(b.data.polygons)} faces)",
+    )
 
 
 def _dist_to_rim(p, rim):
@@ -534,7 +618,8 @@ def test_freehand_keeps_the_points_it_was_drawn_through():
     smoothed and then resampled down to Control Points, which is a Curve setting: a stroke
     of 200 samples became 20, and a step in the traced line came out rounded off by
     millimetres. Now the drawn points are the control points, and the rim runs through
-    every one of them, pushed out by the clearance and nothing else.
+    every one of them, where they were drawn: not pushed out by the clearance, not
+    splined between them, not lifted off the surface afterwards.
     """
     print("== a freehand loop cuts on the line it was drawn on")
     reset_scene()
@@ -550,8 +635,8 @@ def test_freehand_keeps_the_points_it_was_drawn_through():
     loop = _traced_loop(fig, Vector((0.0, 0.0, 0.0)), Vector((1.0, 0.0, 0.0)), 14.0, samples=200, shape=stepped)
     locs = [loc for loc, _n in loop]
     margin = plan.loop_margin(bpy.context, settings, locs, diag)
-    # where every point of the rim belongs: the stroke, pushed clear along its own normal
-    want = [loc + nor * margin for loc, nor in loop]
+    # where every point of the rim belongs: on the stroke, and nowhere else
+    want = list(locs)
 
     kept = surfaces.dedupe_polyline(want, diag * 0.002)
     check(
@@ -564,18 +649,23 @@ def test_freehand_keeps_the_points_it_was_drawn_through():
     )
 
     def strayed(**kw):
-        verts, _faces, rim = _freehand_patch(fig, loop, margin, **kw)
+        verts, _faces, rim, _c = _freehand_patch(fig, loop, margin, **kw)
         edge = [Vector(v) for v in verts[:rim]]
         return max(_dist_to_rim(p, edge) for p in want)
 
     now = strayed()
-    before = strayed(smoothing=0.35, control_points=20)
-    print(f"  rim strays {now:.3f} mm from the drawn points, was {before:.3f} mm")
-    check(now < 0.2, f"the rim runs through the drawn points ({now:.3f} mm off)")
+    pushed = strayed(pushed=True)
+    before = strayed(smoothing=0.35, control_points=20, pushed=True)
+    print(f"  rim strays {now:.4f} mm from the drawn points, was {pushed:.3f} mm pushed and {before:.3f} mm resampled")
+    check(now < 1e-4, f"the rim runs through the drawn points ({now:.4f} mm off)")
+    check(pushed > margin * 0.5, f"the clearance alone used to move it by the margin ({pushed:.3f} mm off)")
     check(now < before / 4.0, f"a long way closer than the resampled rim ({before:.3f} mm off)")
 
-    verts, faces, _rim = _freehand_patch(fig, loop, margin)
-    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(verts, faces, add_pin=False)], gap=0.2)
+    verts, _faces, rim, cutter = _freehand_patch(fig, loop, margin)
+    on_rim = [Vector(v) for v in verts[:rim]]
+    exact = max(min((p - q).length for q in on_rim) for p in want)
+    check(exact < 1e-6, f"every drawn point is a rim vertex ({exact:.2e} mm)")
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(*cutter, add_pin=False)], gap=0.2)
     a, b, _s = cutting.perform_cut(bpy.context, fig, spec, ("A", "B"), out_collection("traced"))
     check(is_closed_manifold(a.data) and is_closed_manifold(b.data), "and the traced cut still splits the model")
 
@@ -601,10 +691,10 @@ def test_a_split_that_worked_is_not_reported_as_a_failure():
     # a loop drawn slanted across one thigh, so the membrane is small, tilted and sits
     # a long way from the centroid of everything it cuts off
     axis = Vector((0.3, 0.2, 0.93))
-    loop = _traced_loop(fig, Vector((-14.0, -5.0, -20.0)), axis, 6.0)
+    loop = _traced_loop(fig, Vector((-14.0, -5.0, -20.0)), axis, 6.0, from_inside=True)
     settings = bpy.context.scene.esp
     margin = plan.loop_margin(bpy.context, settings, [loc for loc, _n in loop], diag)
-    verts, faces, _rim = _freehand_patch(fig, loop, margin)
+    _v, _f, _rim, (verts, faces) = _freehand_patch(fig, loop, margin)
     bvh = mesh_utils.bvh_from_pydata(verts, faces)
     mesh = mesh_utils.world_mesh_copy(bpy.context, fig, "_w")
     slab_bm = surfaces.slab_from_patch(verts, faces, 0.2)
@@ -626,6 +716,54 @@ def test_a_split_that_worked_is_not_reported_as_a_failure():
     )
     for p in pieces:
         mesh_utils.remove_mesh(p)
+
+
+def test_freehand_cut_stays_in_the_crease():
+    """A loop traced along a crease cuts in the crease (issue #1).
+
+    The report: with Loop Smoothing at zero the cut still lands a few millimetres off
+    the crease the stroke followed, rounded at the corners. What moved it was not a
+    smoothing pass but the clearance: the rim was pushed out along the surface normal
+    and then lifted clear of the model again, and in a crease there are two surfaces to
+    clear - the push off one lands the point under the other, the lift off that one
+    carries it out of the crease. The rim is not moved at all now; the clearance is a
+    skirt past it, carried by the cutter only, and it finds its own way out of the crease.
+    """
+    print("== a freehand loop traced along a crease cuts in the crease")
+    reset_scene()
+    fig = _hemmed_body()
+    diag = mesh_utils.object_world_diagonal(fig)
+    settings = bpy.context.scene.esp
+    line = -0.25  # the stroke runs round the body just under the hem
+    loop = _traced_loop(fig, Vector((0.0, 0.0, line)), Vector((0.0, 0.0, 1.0)), 10.0, samples=120, wobble=0.0)
+    check(len(loop) > 100, f"the stroke recorded a full ring under the hem ({len(loop)} samples)")
+    check(max(abs(loc.z - line) for loc, _n in loop) < 1e-3, "every sample is on the crease line")
+    locs = [loc for loc, _n in loop]
+    margin = plan.loop_margin(bpy.context, settings, locs, diag)
+
+    old_v, _f, old_rim, _c = _freehand_patch(fig, loop, margin, pushed=True)
+    fell = line - max(v.z for v in old_v[:old_rim])
+    check(fell > margin * 0.5, f"the pushed rim used to leave the crease by {fell:.2f} mm (margin {margin:.2f})")
+
+    verts, _faces, rim, cutter = _freehand_patch(fig, loop, margin)
+    off = max(abs(v.z - line) for v in verts[:rim])
+    check(off < 1e-3, f"the rim now runs along the crease ({off:.4f} mm off the line)")
+    skirt = cutter[0][-rim:]
+    clear = min(_depths(fig, skirt))
+    check(clear > margin * 0.5, f"and the skirt still stands clear of the model ({clear:+.2f} mm)")
+    check(max(p.z for p in skirt) < 0.0, "the skirt went out under the hem, not into it")
+
+    spec = cutting.CutSpec(contacts=[cutting.ContactSpec(*cutter, add_pin=False)], gap=0.2)
+    a, b, _s = cutting.perform_cut(bpy.context, fig, spec, ("A", "B"), out_collection("crease"))
+    check(is_closed_manifold(a.data) and is_closed_manifold(b.data), "the cut splits the body under the hem")
+    lower, upper = sorted((a, b), key=lambda o: mesh_utils.mesh_centroid(o.data).z)
+    wall_top = max(v.co.z for v in lower.data.vertices if v.co.xy.length > 9.5)
+    collar = min(v.co.z for v in upper.data.vertices if 9.5 < v.co.xy.length < 10.5)
+    print(f"  lower part ends at z={wall_top:.3f}, the upper keeps the wall down to z={collar:.3f}")
+    check(abs(wall_top - (line - 0.1)) < 0.12, f"the lower part ends on the line, less half the kerf ({wall_top:.3f})")
+    check(abs(collar - (line + 0.1)) < 0.12, f"the upper part keeps the wall down to the line ({collar:.3f})")
+    hem = min(v.co.z for v in upper.data.vertices if v.co.xy.length > 10.6)
+    check(hem > -0.05, f"and the hem itself is untouched: nothing of it below z=0 ({hem:.3f})")
 
 
 def test_edited_connector_is_the_one_built():
@@ -1026,6 +1164,7 @@ if __name__ == "__main__":
     test_freehand_loop_really_leaves_the_model()
     test_freehand_keeps_the_points_it_was_drawn_through()
     test_a_split_that_worked_is_not_reported_as_a_failure()
+    test_freehand_cut_stays_in_the_crease()
     test_edited_connector_is_the_one_built()
     test_stepped_cut()
     test_cross_section()

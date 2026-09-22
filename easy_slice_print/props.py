@@ -88,9 +88,10 @@ def _settings_update(self, context):
 
 
 def _record_show_update(self, context):
-    from . import plan
+    from . import overlay, plan
 
     plan.set_record_visibility(self, self.show)
+    overlay.redraw()  # the failure map on this surface goes and comes with it
 
 
 def _active_update(self, context):

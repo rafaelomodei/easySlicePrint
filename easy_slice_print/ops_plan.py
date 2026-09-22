@@ -138,15 +138,31 @@ class ESP_OT_refresh_pins(bpy.types.Operator):
 
 
 # ----------------------------------------------------------------------------
+def edit_surface_of(rec, index):
+    """The preview surface of contact `index` and whether it is edited by its points.
+
+    A plane is moved as an object (G/R/S); a curve or freehand surface is reshaped
+    point by point. Each contact of a two-contact cut has a surface of its own, and
+    is edited on its own.
+    """
+    name = rec.surface_b if index == 1 and rec.two_contact else rec.surface_a
+    sobj = bpy.data.objects.get(name) if name else None
+    if sobj is None:
+        return None, False
+    return sobj, sobj.get("esp_kind", 'STRAIGHT') != 'STRAIGHT'
+
+
 class ESP_OT_edit_surface(bpy.types.Operator):
     bl_idname = "esp.edit_surface"
     bl_label = "Edit Cut Surface"
     bl_description = (
         "Plane cut: selects the cut plane (G/R/S). Curve/Freehand: drag the control points; "
-        "Ctrl+LMB add, X delete, G slide all, R reset, Ctrl+Z undo, Enter/Esc finish"
+        "Ctrl+LMB add, X delete, G slide all, R reset, Ctrl+Z undo, Enter/Esc finish. "
+        "A two-contact cut edits one contact at a time"
     )
     bl_options = {'REGISTER', 'UNDO'}
     HOVER_PX = 12.0
+    index: IntProperty(default=0, description="Which contact of a two-contact cut to edit")
 
     @classmethod
     def poll(cls, context):
@@ -155,12 +171,12 @@ class ESP_OT_edit_surface(bpy.types.Operator):
     def invoke(self, context, event):
         rec = active_record(context)
         self.rec = rec
-        sobj = bpy.data.objects.get(rec.surface_a)
+        sobj, by_points = edit_surface_of(rec, self.index)
         if sobj is None:
             self.report({'ERROR'}, "Preview surface not found")
             return {'CANCELLED'}
         rec.show = True
-        if rec.cut_type == 'STRAIGHT' or rec.two_contact:
+        if not by_points:
             for o in context.view_layer.objects:
                 o.select_set(False)
             sobj.select_set(True)
@@ -588,7 +604,8 @@ class ESP_OT_approve(bpy.types.Operator):
     bl_idname = "esp.approve"
     bl_label = "Approve"
     bl_description = (
-        "Keep the built parts as final and clear the plan (the source stays in ESP_Backup when Keep Original is on)"
+        "Keep the built parts as final and drop the cuts they came from; cuts that were not built "
+        "stay in the plan, on the part they sit on (the source stays in ESP_Backup when Keep Original is on)"
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -600,16 +617,34 @@ class ESP_OT_approve(bpy.types.Operator):
         s = context.scene.esp
         # only what this build actually consumed - a source it cut is in the backup
         consumed = [o for o in plan.plan_sources(context) if o.get("esp_backup_home") is not None]
-        plan.remove_all_records(context)
+        col = bpy.data.collections.get(s.built_collection) if s.built_collection else None
+        parts = [o for o in col.objects if o.type == 'MESH'] if col is not None else []
+        # a built cut is done: its part exists, cutting it again would only split the part
+        for i in reversed(range(len(s.cuts))):
+            if s.cuts[i].built:
+                plan.remove_record(context, i)
+        # what was not built (not Ready, or skipped) waits on the part it was drawn over:
+        # its source is going to the backup or away, and the next build must cut the part
+        for rec in s.cuts:
+            target = bpy.data.objects.get(rec.target) if rec.target else None
+            if parts and (target is None or target in consumed):
+                rec.target = _pick_target(parts, Vector(rec.anchor)).name
+                plan.refresh_record_frames(context, rec)
         if not s.keep_original:
             for o in consumed:
                 mesh_utils.remove_object(o)
         s.built = False
-        s.base_object = ""
+        s.base_object = s.cuts[0].target if len(s.cuts) else ""
         s.built_collection = ""
+        if len(s.cuts):
+            plan.set_plan_hidden(context, False)
+        else:
+            plan.remove_all_records(context)  # drops the empty plan collection
         overlay.clear()
-        s.last_message = "Parts approved"
-        self.report({'INFO'}, "Parts approved. Use Export to write the files.")
+        left = len(s.cuts)
+        msg = "Parts approved" + (f", {left} unbuilt cut(s) kept in the plan" if left else "")
+        s.last_message = msg
+        self.report({'INFO'}, msg + ". Use Export to write the files.")
         return {'FINISHED'}
 
 

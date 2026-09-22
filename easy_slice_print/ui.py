@@ -242,8 +242,11 @@ class ESP_PT_plan(ESPPanel, bpy.types.Panel):
                 icon=TYPE_ICON.get(rec.cut_type, 'DOT'),
             )
             row.prop(rec, "enabled")
-            box.operator("esp.edit_surface", icon='EDITMODE_HLT')
-            if rec.cut_type == 'STRAIGHT' or rec.two_contact:
+            row = box.row(align=True)
+            row.operator("esp.edit_surface", icon='EDITMODE_HLT').index = 0
+            if rec.two_contact:
+                row.operator("esp.edit_surface", text="2nd", icon='EDITMODE_HLT').index = 1
+            if rec.cut_type == 'STRAIGHT':
                 box.label(text="G move, R rotate, S scale the plane", icon='INFO')
             else:
                 box.label(text="Drag points; G slides the whole cut", icon='INFO')

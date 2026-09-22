@@ -4,7 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.7-alpha] - 2026-09-21
+
+### Changed
+- **Approve only drops the cuts it built.** A cut left out of the build — unticked in *Ready*,
+  or skipped because it failed — used to be thrown away with the rest of the plan on Approve.
+  It now stays in the list, moved onto the approved part it sits on, so the next Build cuts
+  that part and not the model it came from. The plan is empty after Approve only when every
+  cut in it was built.
+
+### Fixed
+- **A two-contact curve or freehand cut can be edited by its points.** *Edit Cut Surface* on a
+  *Two Contacts / Base Split* cut used to select the surface as a whole, plane style, whatever
+  tool had drawn it: the control points never appeared. Each contact now edits on its own —
+  *Edit Cut Surface* for the first, *2nd* for the other — with the same point editor a
+  single-contact cut gets, and two planes are still moved with G/R/S.
+- **The failure map follows the eye.** Hiding a cut in the list hid its preview surface but
+  left the red/green map of its failed build floating in the viewport. The map is now drawn
+  only while the surface it is painted on is shown, and comes back with it.
 
 ## [0.3.6-alpha] - 2026-09-16
 
@@ -342,7 +359,8 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.6-alpha...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.7-alpha...HEAD
+[0.3.7-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.6-alpha...v0.3.7-alpha
 [0.3.6-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.5-alpha...v0.3.6-alpha
 [0.3.5-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.4-alpha...v0.3.5-alpha
 [0.3.4-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.3-alpha...v0.3.4-alpha

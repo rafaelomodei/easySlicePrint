@@ -31,7 +31,7 @@ below is an original implementation; nothing was copied.
 | Draft is cheap, geometry deferred to build | records store only the cut surface + pin transform; booleans run on **Build** | `plan.py`, `ESP_OT_build` |
 | Move / rotate / scale a straight cut | **Edit Cut Surface** selects the plane; G/R/S; pin follows (depsgraph handler) | `ESP_OT_edit_surface`, `plan.depsgraph_handler` |
 | Cut surface with a usable pivot | generated surfaces get their own origin at the patch centre (*Surface Origin*: Cut Surface / Target Object) | `plan.surface_origin_point` |
-| Edit curve/freehand points | point editor modal: drag, Ctrl+LMB add, X delete, G slide whole cut, R reset, Ctrl+Z undo | `ESP_OT_edit_surface` |
+| Edit curve/freehand points | point editor modal: drag, Ctrl+LMB add, X delete, G slide whole cut, R reset, Ctrl+Z undo; a two-contact cut edits each contact on its own (**Edit Cut Surface** / **2nd**) | `ESP_OT_edit_surface` |
 | Connector on/off, shape, size, width/height | Connector panel (per next cut or per selected cut; new cuts copy the selected cut's settings) | `ESP_PT_connector` |
 | Built-in + custom connector shapes | Cylinder, Tapered, Hexagon, Box + `ESP_Connectors` library (unit-box convention) | `core/connectors.py` |
 | Printed parts that actually fit together | *Printer Clearance* set once per printer in the preferences; each cut picks Press / Snug / Easy / Loose / Custom, and the panel shows how much wider the socket comes out | `ESP_Preferences.printer_clearance_mm`, `plan.apply_fit` |

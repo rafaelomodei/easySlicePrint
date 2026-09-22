@@ -141,7 +141,7 @@ and is still going through the platform's review, so until it is approved use th
      `Enter` / `C` from any angle.
 5. Connector panel: shape, size, pin side, cut gap, and the **Fit** of the printed joint.
 6. **Plan mode**: select a cut in the list to edit it — *Edit Cut Surface* (G/R/S for planes, drag
-   points for curves; each cut surface has its own origin at its centre, so `R` and `S` pivot on the
+   points for curves; a two-contact cut has a *2nd* button for its other contact; each cut surface has its own origin at its centre, so `R` and `S` pivot on the
    surface — set *Surface Origin* to *Target Object* if you would rather they share the model's pivot), *Select Connector* then G/R/S, *Reset*, *Swap* the pin side. Untick **Ready** to
    leave a cut out of the build, the eye hides its preview, ✕ deletes it.
 7. **Build** → parts appear in `ESP_Built_<name>`. **Back to Plan** to change anything, **Approve** to finish.

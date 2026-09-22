@@ -187,6 +187,15 @@ def test_build_shows_why_a_cut_failed():
     shown = overlay.shown()
     check(shown is not None and shown.cut and shown.label == rec.name, "the diagnosis is up, named after the cut")
     check(shown.surface is not None, "the cut surface is painted")
+    check(not overlay.hidden(), "the map shows while the cut does")
+    rec.show = False
+    check(overlay.hidden() and overlay.shown() is not None, "the eye hides the map with the surface, keeping it")
+    rec.show = True
+    check(not overlay.hidden(), "and brings it back")
+    plan.set_plan_hidden(ctx, True)
+    check(overlay.hidden(), "a hidden plan hides the map")
+    plan.set_plan_hidden(ctx, False)
+    check(not overlay.hidden(), "a shown plan shows it")
     pos, colors, _idx = shown.surface
     reds = [p for p, c in zip(pos, colors) if c[0] > 0.9 and c[1] < 0.4]
     greens = [p for p, c in zip(pos, colors) if c[1] > 0.8 and c[0] < 0.5]
@@ -649,6 +658,82 @@ def test_cut_after_approve():
     check(res == {'FINISHED'} and not upper.hide_get(), "back to plan restored the approved part")
 
 
+def test_approve_keeps_unbuilt_cuts():
+    """Approve drops the cuts it built; a cut that was not built stays, on the part it sits on."""
+    print("== approve keeps the cuts that were not built")
+    sc = reset_scene()
+    obj = make_cylinder("Keep")  # z from -30 to 30
+    s = sc.esp
+    s.mode = 'PLAN'
+    s.keep_original = False
+    diag = mesh_utils.object_world_diagonal(obj)
+    ctx = bpy.context
+    low = plan.add_record(ctx, obj, 'STRAIGHT', [plane_contact(-10.0, diag)])
+    high = plan.add_record(ctx, obj, 'STRAIGHT', [plane_contact(10.0, diag)])
+    high.enabled = False
+    high_name = high.name  # the record slot moves once the built cut is removed
+    bpy.ops.esp.build()
+    check(low.built and not high.built, "only the ready cut was built")
+    res = bpy.ops.esp.approve()
+    check(res == {'FINISHED'} and len(s.cuts) == 1 and s.cuts[0].name == high_name, "the unbuilt cut survived approve")
+    check(bpy.data.objects.get("Keep") is None, "the original went away (Keep Original off)")
+    rec = s.cuts[0]
+    parts = sorted(bpy.data.collections["ESP_Built_Keep"].objects, key=lambda o: world_bounds(o)[0].z)
+    upper = parts[1]  # -10 .. 30, where the z=10 cut sits
+    check(rec.target == upper.name, f"the kept cut now targets the part under it ({rec.target})")
+    check(s.base_object == upper.name, f"the plan is rooted at that part ({s.base_object})")
+    check(bpy.data.objects.get(rec.surface_a) is not None, "its preview surface is still there")
+    col = bpy.data.collections.get(plan.PLAN_COLLECTION)
+    check(col is not None and not col.hide_viewport, "the plan is visible again")
+    check(s.last_message.startswith("Parts approved, 1 unbuilt cut(s) kept"), f"message says so ({s.last_message})")
+    draw_all_panels(ctx)
+    rec.enabled = True
+    res = bpy.ops.esp.build()
+    col = bpy.data.collections.get(s.built_collection)
+    check(res == {'FINISHED'} and col is not None and len(col.objects) == 2, "the kept cut builds on the part")
+    lowest = min(world_bounds(o)[0].z for o in col.objects)
+    check(lowest > -25.0, f"it cut the part, not the whole model (lowest z {lowest:.1f})")
+    check(bpy.data.objects.get(parts[0].name) is not None, "the other approved part survived")
+    res = bpy.ops.esp.approve()
+    check(res == {'FINISHED'} and len(s.cuts) == 0, "approving the last cut empties the plan")
+    check(bpy.data.collections.get(plan.PLAN_COLLECTION) is None, "and drops the plan collection")
+    check(s.last_message == "Parts approved", f"plain message when nothing is kept ({s.last_message})")
+
+
+def test_two_contact_surfaces_edit_by_points():
+    """Each contact of a two-contact curve or freehand cut is edited by its own points; planes by G/R/S."""
+    print("== two-contact cuts edit each surface")
+    from easy_slice_print.ops_plan import edit_surface_of
+
+    sc = reset_scene()
+    obj = make_cylinder("Twin")
+    s = sc.esp
+    s.mode = 'PLAN'
+    diag = mesh_utils.object_world_diagonal(obj)
+    ctx = bpy.context
+    rec = plan.add_record(ctx, obj, 'CURVED', [curve_contact(obj, diag), curve_contact(obj, diag, y_end=8.0)])
+    check(rec.two_contact and rec.surface_a and rec.surface_b, "a two-contact curve cut has two surfaces")
+    a, by_pts_a = edit_surface_of(rec, 0)
+    b, by_pts_b = edit_surface_of(rec, 1)
+    check(a is not None and a.name == rec.surface_a and by_pts_a, "contact 1 edits by points")
+    check(b is not None and b.name == rec.surface_b and by_pts_b, "contact 2 edits by points, on its own surface")
+    check(a != b and len(plan.surface_points(b)) == 20, "the second surface carries its own control points")
+    draw_all_panels(ctx)
+    loop = plan.add_record(ctx, obj, 'FREEHAND', [freehand_contact(obj), freehand_contact(obj, height=-5.0)])
+    fa, by_a = edit_surface_of(loop, 0)
+    fb, by_b = edit_surface_of(loop, 1)
+    check(by_a and by_b and fa != fb, "a two-contact freehand cut edits both loops by points")
+    flat = plan.add_record(ctx, obj, 'STRAIGHT', [plane_contact(-10.0, diag), plane_contact(10.0, diag)])
+    pa, by_pa = edit_surface_of(flat, 0)
+    pb, by_pb = edit_surface_of(flat, 1)
+    check(pa is not None and pb is not None and not by_pa and not by_pb and pa != pb, "two planes are moved as objects")
+    single = plan.add_record(ctx, obj, 'CURVED', [curve_contact(obj, diag)])
+    sa, _ = edit_surface_of(single, 0)
+    sb, _ = edit_surface_of(single, 1)
+    check(sa is not None and sb == sa, "a one-contact cut ignores the 2nd index")
+    draw_all_panels(ctx)
+
+
 def test_quick_mode():
     print("== quick mode")
     sc = reset_scene()
@@ -761,6 +846,8 @@ if __name__ == "__main__":
     test_register()
     test_plan_workflow()
     test_cut_after_approve()
+    test_approve_keeps_unbuilt_cuts()
+    test_two_contact_surfaces_edit_by_points()
     test_quick_mode()
     test_quick_plane_section()
     test_printer_fit()

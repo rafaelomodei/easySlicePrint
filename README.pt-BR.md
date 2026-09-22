@@ -141,7 +141,7 @@ ainda passa pela revisão da plataforma — até ser aprovada, use o zip abaixo.
      `Enter` / `C` de qualquer ângulo.
 5. Painel Connector: forma, tamanho, lado do pino, cut gap e o **Fit** do encaixe impresso.
 6. **Plan mode**: selecione um corte na lista para editar — *Edit Cut Surface* (G/R/S nos planos, arraste
-   pontos nas curvas; cada superfície de corte tem origem própria no seu centro, então `R` e `S` giram e
+   pontos nas curvas; um corte de dois contatos tem o botão *2nd* para o outro contato; cada superfície de corte tem origem própria no seu centro, então `R` e `S` giram e
    escalam em torno dela — mude *Surface Origin* para *Target Object* se preferir o pivô do modelo), *Select Connector* e G/R/S, *Reset*, *Swap* do lado do pino. Desmarque **Ready** para
    deixar um corte fora do build, o olho esconde o preview, ✕ apaga.
 7. **Build** → as peças aparecem em `ESP_Built_<nome>`. **Back to Plan** para mudar algo, **Approve** para finalizar.

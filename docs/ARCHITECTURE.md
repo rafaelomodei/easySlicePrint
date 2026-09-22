@@ -152,7 +152,9 @@ timer to avoid recursion).
 **Build** always rebuilds from the original: it removes the previous build, restores the source from
 `ESP_Backup`, applies every *Ready* cut in list order (each cut picks the part closest to its
 anchor), renumbers the parts, hides the source again and hides the plan previews. **Back to Plan**
-undoes exactly that; **Approve** clears the plan and keeps the parts.
+undoes exactly that; **Approve** keeps the parts and removes the cuts that were built. A cut that was
+not built (not *Ready*, or skipped) stays, retargeted to the part closest to its anchor, and the plan is
+rooted there so the next build cuts the part rather than the stashed source.
 
 ## Testing
 

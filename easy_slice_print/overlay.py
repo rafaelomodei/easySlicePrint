@@ -11,8 +11,9 @@ colours, no change to the viewport shading, and disappears without a trace. The
 model itself is left alone: the surface is what the user edits, so the surface is
 what carries the map.
 
-The map stays until the next cut attempt, the next build, or the user hides it. It is
-not part of the undo history - nothing in the scene is - so an undo that takes the cut
+The map stays until the next cut attempt, the next build, or the user hides it, and it
+follows the eye of its cut in the list: while the preview surface is hidden, so is the
+map painted on it. It is not part of the undo history - nothing in the scene is - so an undo that takes the cut
 away has to take the map with it: after every undo or redo the map is kept only while
 the cut it was made for is still in the plan.
 """
@@ -157,9 +158,31 @@ def _batch(state):
     return shader, batch_for_shader(shader, 'TRIS', {"pos": pos, "color": colors}, indices=indices)
 
 
+def hidden(state=None):
+    """Is the map's cut hidden in the plan (its eye off, or the plan collection hidden)?
+
+    A Quick cut has no record: its map is never hidden this way.
+    """
+    state = _state if state is None else state
+    if state is None:
+        return False
+    settings = getattr(bpy.context.scene, "esp", None)
+    if settings is None:
+        return False
+    for rec in settings.cuts:
+        if rec.name == state.label:
+            if not rec.show:
+                return True
+            from . import plan
+
+            col = bpy.data.collections.get(plan.PLAN_COLLECTION)
+            return col is not None and col.hide_viewport
+    return False
+
+
 def _draw():
     state = _state
-    if state is None:
+    if state is None or hidden(state):
         return
     import gpu
 

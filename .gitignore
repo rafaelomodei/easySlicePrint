@@ -6,6 +6,7 @@ build/
 .venv/
 *.blend1
 tests/_out/
+tmp/
 .DS_Store
 .ruff_cache/
 

@@ -65,7 +65,7 @@ const ogLocale: Record<Lang, string> = { en: "en_US", pt: "pt_BR", es: "es_ES" }
     {languages.map((code) => <link rel="alternate" hreflang={code} href={new URL(localeUrl(code), Astro.site)} />)}
     <link rel="alternate" hreflang="x-default" href={new URL(localeUrl(defaultLang), Astro.site)} />
     <link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
-    <meta name="theme-color" content="#0d0f14" />
+    <meta name="theme-color" content="#ffffff" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={pageDescription} />
@@ -81,7 +81,7 @@ const ogLocale: Record<Lang, string> = { en: "en_US", pt: "pt_BR", es: "es_ES" }
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=JetBrains+Mono:wght@500&display=swap"
       rel="stylesheet"
     />
     <script

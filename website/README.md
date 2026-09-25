@@ -15,6 +15,8 @@ npm run preview
 
 | Path | What |
 |---|---|
+| `DESIGN.md` | the visual system (Mobbin-style gallery-white monochrome, from `npx getdesign add mobbin`) — read it before touching the UI |
+| `src/styles/global.css` | the design tokens and shared classes (pills, cards, checks, steps) |
 | `src/data/site.ts` | name, links, download URL. The **version** is read from `easy_slice_print/blender_manifest.toml` at build time |
 | `src/i18n/en.ts` | **all English copy** — the reference dictionary |
 | `src/i18n/pt.ts`, `src/i18n/es.ts` | the Portuguese and Spanish translations, typed against `en.ts` |

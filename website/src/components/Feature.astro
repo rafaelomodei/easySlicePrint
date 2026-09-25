@@ -6,7 +6,7 @@ interface Props {
 const { icon, title } = Astro.props;
 ---
 
-<div class="card feature">
+<div class="card soft feature">
   <span class="icon" aria-hidden="true">{icon}</span>
   <h3>{title}</h3>
   <p class="muted"><slot /></p>
@@ -16,18 +16,25 @@ const { icon, title } = Astro.props;
   .feature {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.4rem;
   }
   .feature h3 {
-    font-size: 1.05rem;
-    margin: 0.25rem 0 0.15rem;
+    font-size: 1.0625rem;
+    margin: 1rem 0 0;
   }
   .feature p {
     margin: 0;
-    font-size: 0.95rem;
+    font-size: 0.9375rem;
   }
+  /* iOS-style squircle icon tile */
   .icon {
-    font-size: 1.5rem;
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 30%;
+    background: var(--canvas);
+    font-size: 1.6rem;
     line-height: 1;
   }
 </style>

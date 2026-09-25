@@ -24,15 +24,22 @@ const t = useTranslations(lang);
 <style>
   .nf {
     text-align: center;
-    padding-block: 4rem;
+    padding-block: 4rem 0;
   }
   .code {
-    font-family: var(--mono);
-    color: var(--accent);
-    font-size: 1.2rem;
-    letter-spacing: 0.2em;
+    display: block;
+    font-size: clamp(5rem, 16vw, 9rem);
+    font-weight: var(--w-head);
+    line-height: 1;
+    color: var(--text-faint);
+    margin-bottom: 1rem;
   }
   h1 {
-    font-size: clamp(2rem, 5vw, 3rem);
+    font-size: clamp(2rem, 5vw, 3.5rem);
+  }
+  p {
+    font-size: 1.25rem;
+    font-weight: 300;
+    margin-bottom: 2rem;
   }
 </style>

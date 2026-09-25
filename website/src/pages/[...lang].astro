@@ -49,29 +49,27 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
   <!-- ============ HERO ============ -->
   <section class="hero">
     <div class="container">
-      <div class="hero-grid">
-        <div class="hero-copy">
-          <div class="pills">
-            <span class="pill warn">{t.status.pill}</span>
-            <span class="pill teal" set:html={t.hero.pillFree} />
-            <span class="pill">{t.hero.pillBlender}</span>
-            <span class="pill">{t.hero.pillPlatforms}</span>
-          </div>
-          <h1>{t.hero.titleLead} <span class="grad">{t.hero.titleAccent}</span></h1>
-          <p class="lead">{t.hero.lead}</p>
-          <p class="notice" set:html={t.status.note} />
-          <div class="cta">
-            <a class="btn btn-primary" href="#download">
-              {t.hero.download} <small>{t.hero.free}</small>
-            </a>
-            <a class="btn btn-ghost" href={site.repoUrl} target="_blank" rel="noopener">{t.hero.github}</a>
-          </div>
-          <p class="faint fine">{t.hero.fine}</p>
+      <div class="hero-copy">
+        <div class="pills">
+          <span class="pill accent">{t.status.pill}</span>
+          <span class="pill" set:html={t.hero.pillFree} />
+          <span class="pill outline">{t.hero.pillBlender}</span>
+          <span class="pill outline">{t.hero.pillPlatforms}</span>
         </div>
-        <div class="hero-media">
-          <Media slot={m.hero} lang={lang} large />
+        <h1>{t.hero.titleLead} <span class="soft-word">{t.hero.titleAccent}</span></h1>
+        <p class="lead">{t.hero.lead}</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="#download">
+            {t.hero.download} <small>{t.hero.free}</small>
+          </a>
+          <a class="btn btn-outline" href={site.repoUrl} target="_blank" rel="noopener">{t.hero.github}</a>
         </div>
+        <p class="faint fine">{t.hero.fine}</p>
       </div>
+      <div class="hero-media">
+        <Media slot={m.hero} lang={lang} large />
+      </div>
+      <p class="notice hero-notice" set:html={t.status.note} />
     </div>
   </section>
 
@@ -162,8 +160,8 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
     <div class="split">
       <div>
         <div class="shapes">
-          {t.connectors.shapes.map((shape) => <span class="pill accent">{shape}</span>)}
-          <span class="pill">{t.connectors.shapesCustom}</span>
+          {t.connectors.shapes.map((shape) => <span class="pill">{shape}</span>)}
+          <span class="pill outline">{t.connectors.shapesCustom}</span>
         </div>
         <ul class="checks">
           {t.connectors.checks.map((item) => <li set:html={item} />)}
@@ -185,7 +183,7 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
     <div class="grid grid-3">
       {
         Object.values(t.who.cards).map((card) => (
-          <div class="card">
+          <div class="card soft">
             <h3 set:html={card.title} />
             <p class="muted">{card.body}</p>
           </div>
@@ -209,7 +207,7 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
           {t.compat.performance.checks.map((item) => <li set:html={item} />)}
         </ul>
       </div>
-      <div class="card limits">
+      <div class="card soft limits">
         <h3>{t.compat.limits.title}</h3>
         <ul class="plain muted">
           {t.compat.limits.items.map((item) => <li set:html={item} />)}
@@ -224,7 +222,7 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
       <ol class="steps">
         {t.install.steps.map((step) => <li set:html={step} />)}
       </ol>
-      <div class="card quickstart">
+      <div class="card soft quickstart">
         <h3>{t.install.quickstart.title}</h3>
         <ol class="plain muted">
           {t.install.quickstart.steps.map((step) => <li set:html={step} />)}
@@ -238,11 +236,10 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
   <section id="download" class="section download">
     <div class="container">
       <div class="download-box">
-        <div>
+        <div class="download-copy">
           <span class="eyebrow">{t.download.eyebrow}</span>
-          <h2>{site.name} v{site.version} <span class="pill warn">{t.status.pill}</span></h2>
+          <h2>{site.name} <span class="ver">v{site.version}</span> <span class="pill accent">{t.status.pill}</span></h2>
           <p class="muted">{t.download.body}</p>
-          <p class="notice" set:html={t.status.note} />
           <div class="cta">
             <a class="btn btn-primary" href={site.links.downloadZip}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -250,20 +247,23 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
               </svg>
               easy_slice_print-{site.version}.zip
             </a>
-            <a class="btn btn-ghost" href={site.links.blenderExtension} target="_blank" rel="noopener">{t.download.extension}</a>
-            <a class="btn btn-ghost" href={site.links.releases} target="_blank" rel="noopener">{t.download.releases}</a>
-            <a class="btn btn-ghost" href={site.links.changelog} target="_blank" rel="noopener">{t.download.changelog}</a>
+            <a class="btn btn-outline" href={site.links.blenderExtension} target="_blank" rel="noopener">{t.download.extension}</a>
+          </div>
+          <div class="links">
+            <a class="btn btn-soft btn-sm" href={site.links.releases} target="_blank" rel="noopener">{t.download.releases} ↗</a>
+            <a class="btn btn-soft btn-sm" href={site.links.changelog} target="_blank" rel="noopener">{t.download.changelog} ↗</a>
           </div>
           <p class="faint fine" set:html={t.download.note} />
         </div>
-        <div class="download-meta">
-          <dl>
+        <div class="download-side">
+          <dl class="download-meta">
             <dt>{t.download.meta.version}</dt><dd>{site.version}</dd>
             <dt>{t.download.meta.blender}</dt><dd>{site.blenderMin} – {site.blenderMax}</dd>
             <dt>{t.download.meta.platforms}</dt><dd>{t.download.meta.platformsValue}</dd>
             <dt>{t.download.meta.license}</dt><dd>{site.license}</dd>
             <dt>{t.download.meta.price}</dt><dd>{t.download.meta.priceValue}</dd>
           </dl>
+          <p class="notice" set:html={t.status.note} />
         </div>
       </div>
     </div>
@@ -280,17 +280,17 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
       <div class="card">
         <h3>{t.support.cards.bug.title}</h3>
         <p class="muted">{t.support.cards.bug.body}</p>
-        <a href={site.links.newIssue}>{t.support.cards.bug.link}</a>
+        <a class="btn btn-soft btn-sm" href={site.links.newIssue}>{t.support.cards.bug.link}</a>
       </div>
       <div class="card">
         <h3>{t.support.cards.feature.title}</h3>
         <p class="muted">{t.support.cards.feature.body}</p>
-        <a href={site.links.newIssue}>{t.support.cards.feature.link}</a>
+        <a class="btn btn-soft btn-sm" href={site.links.newIssue}>{t.support.cards.feature.link}</a>
       </div>
       <div class="card">
         <h3>{t.support.cards.contribute.title}</h3>
         <p class="muted">{t.support.cards.contribute.body}</p>
-        <a href={site.links.contributing}>{t.support.cards.contribute.link}</a>
+        <a class="btn btn-soft btn-sm" href={site.links.contributing}>{t.support.cards.contribute.link}</a>
       </div>
     </div>
   </Section>
@@ -298,55 +298,59 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
 
 <style>
   .hero {
-    padding-block: clamp(3rem, 8vw, 6rem) clamp(3rem, 6vw, 5rem);
+    padding-block: clamp(3.5rem, 9vw, 7rem) 0;
   }
-  .hero-grid {
-    display: grid;
-    grid-template-columns: 1.05fr 1fr;
-    gap: clamp(2rem, 5vw, 4rem);
-    align-items: center;
-  }
-  @media (max-width: 960px) {
-    .hero-grid {
-      grid-template-columns: 1fr;
-    }
+  .hero-copy {
+    max-width: 880px;
+    margin: 0 auto;
+    text-align: center;
   }
   .pills {
     display: flex;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 0.5rem;
-    margin-bottom: 1.4rem;
+    margin-bottom: 1.75rem;
   }
-  .grad {
-    background: linear-gradient(90deg, var(--accent), #ffb37a);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+  .soft-word {
+    color: var(--text-faint);
   }
   .lead {
-    font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+    font-size: clamp(1.1rem, 1.8vw, 1.25rem);
+    font-weight: 300;
     color: var(--text-muted);
-    max-width: 56ch;
+    max-width: 58ch;
+    margin: 1.5rem auto 0;
   }
   .cta {
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem;
-    margin: 1.75rem 0 1rem;
+    margin: 2rem 0 1rem;
+  }
+  .hero .cta {
+    justify-content: center;
   }
   .fine {
-    font-size: 0.85rem;
+    font-size: 0.8125rem;
     margin: 0;
+  }
+  .hero-media {
+    margin-top: clamp(2.5rem, 6vw, 4.5rem);
+  }
+  .hero-notice {
+    max-width: 880px;
+    margin: 1rem auto 0;
   }
   .stack {
     display: grid;
-    gap: clamp(3rem, 6vw, 5rem);
+    gap: clamp(3.5rem, 7vw, 6rem);
   }
   .steps-grid {
-    gap: 2rem;
+    gap: 1.5rem;
   }
   .step h3 {
-    margin-top: 1.2rem;
+    margin-top: 1.25rem;
     display: flex;
     align-items: center;
     gap: 0.6rem;
@@ -357,19 +361,23 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
     width: 1.8rem;
     height: 1.8rem;
     border-radius: 50%;
-    background: var(--accent-soft);
-    color: var(--accent);
-    font-family: var(--mono);
-    font-size: 0.85rem;
+    background: var(--ink);
+    color: var(--on-ink);
+    font-size: 0.8rem;
   }
   .step p {
-    font-size: 0.95rem;
+    font-size: 0.9375rem;
+  }
+  .split h3 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    font-weight: var(--w-head);
+    line-height: 1.13;
   }
   .shapes {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
-    margin-bottom: 1.4rem;
+    margin-bottom: 1.5rem;
   }
   ul.plain,
   ol.plain {
@@ -384,53 +392,83 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
     grid-column: 1 / -1;
   }
   .quickstart h3 {
-    margin-bottom: 0.9rem;
-  }
-  .download {
-    background: linear-gradient(180deg, var(--bg-elev), transparent);
+    margin-bottom: 1rem;
   }
   .download-box {
     display: grid;
-    grid-template-columns: 1.4fr 1fr;
-    gap: 2.5rem;
+    grid-template-columns: 1.3fr 1fr;
+    gap: clamp(2rem, 5vw, 3.5rem);
+    align-items: start;
+    padding: clamp(1.75rem, 5vw, 3.5rem);
+    border-radius: var(--r-md);
+    background: var(--canvas-soft);
+  }
+  .download-box .eyebrow {
+    background: var(--canvas);
+  }
+  .download-box h2 {
+    font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    padding: clamp(1.5rem, 4vw, 3rem);
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    background:
-      radial-gradient(600px 300px at 0% 0%, rgba(255, 138, 61, 0.16), transparent 60%),
-      var(--surface);
+    gap: 0.75rem;
   }
-  .download-box h2 .pill {
-    vertical-align: middle;
-    transform: translateY(-2px);
+  .ver {
+    white-space: nowrap;
   }
-  .download .eyebrow {
-    display: inline-block;
-    font-family: var(--mono);
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--accent);
+  .download-box .cta {
     margin-bottom: 0.75rem;
   }
-  .download-meta dl {
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .links .btn-soft {
+    background: var(--canvas);
+  }
+  .download-side {
+    display: grid;
+    gap: 1rem;
+  }
+  .download-side .notice {
+    background: var(--canvas);
+  }
+  .download-meta {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 0.5rem 1.25rem;
     margin: 0;
-    padding: 1.25rem 1.5rem;
-    border-radius: var(--radius);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    font-size: 0.95rem;
+    padding: 0.5rem 1.5rem;
+    border-radius: var(--r-md);
+    background: var(--canvas);
+    font-size: 0.9375rem;
+  }
+  .download-meta dt,
+  .download-meta dd {
+    padding: 0.8rem 0;
+    border-bottom: 1px solid var(--hairline-soft);
+  }
+  .download-meta dt:last-of-type,
+  .download-meta dd:last-of-type {
+    border-bottom: 0;
   }
   .download-meta dt {
-    color: var(--text-faint);
+    color: var(--text-muted);
+    padding-right: 1.5rem;
   }
   .download-meta dd {
     margin: 0;
-    font-family: var(--mono);
+    font-weight: var(--w-strong);
+    text-align: right;
+  }
+  #support .card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  #support .card .btn {
+    margin-top: auto;
   }
   @media (max-width: 860px) {
     .download-box {

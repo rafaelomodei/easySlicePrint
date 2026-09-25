@@ -8,7 +8,7 @@ const { items } = Astro.props;
 <div class="faq">
   {
     items.map((item) => (
-      <details class="card">
+      <details>
         <summary>{item.q}</summary>
         <p class="muted" set:html={item.a} />
       </details>
@@ -20,15 +20,17 @@ const { items } = Astro.props;
   .faq {
     display: grid;
     gap: 0.75rem;
-    max-width: 820px;
+    max-width: 840px;
+    margin-inline: auto;
   }
   details {
-    padding: 0;
+    border-radius: var(--r-sm);
+    background: var(--canvas-soft);
   }
   summary {
     cursor: pointer;
-    padding: 1.1rem 1.5rem;
-    font-weight: 600;
+    padding: 1.25rem 1.5rem;
+    font-weight: var(--w-strong);
     list-style: none;
     display: flex;
     justify-content: space-between;
@@ -39,17 +41,22 @@ const { items } = Astro.props;
     display: none;
   }
   summary::after {
-    content: "+";
-    font-family: var(--mono);
-    color: var(--accent);
-    font-size: 1.2rem;
-    transition: transform 0.2s ease;
+    content: "";
+    flex: none;
+    width: 10px;
+    height: 10px;
+    margin-top: -4px;
+    border-right: 2px solid var(--ink);
+    border-bottom: 2px solid var(--ink);
+    transform: rotate(45deg);
+    transition: transform 0.2s ease, margin 0.2s ease;
   }
   details[open] summary::after {
-    transform: rotate(45deg);
+    margin-top: 4px;
+    transform: rotate(-135deg);
   }
   details p {
-    padding: 0 1.5rem 1.2rem;
+    padding: 0 1.5rem 1.35rem;
     margin: 0;
   }
 </style>

@@ -13,63 +13,92 @@ const readmeUrl = lang === "pt" ? site.links.readmePtBr : site.links.readme;
 ---
 
 <footer class="footer">
-  <div class="container">
-    <div class="cols">
-      <div>
-        <strong>{site.name}</strong>
-        <p class="muted">{t.meta.description}</p>
-        <p class="faint small">{t.footer.legal}</p>
+  <div class="band">
+    <div class="container">
+      <div class="top">
+        <div class="lockup">
+          <p class="wordmark">{site.name}</p>
+          <p class="tagline">{t.meta.tagline}</p>
+        </div>
+        <div class="cols">
+          <div>
+            <h4>{t.footer.project.title}</h4>
+            <ul>
+              <li><a href={site.repoUrl}>{t.footer.project.source}</a></li>
+              <li><a href={site.links.releases}>{t.footer.project.releases}</a></li>
+              <li><a href={site.links.blenderExtension}>{t.footer.project.extension}</a></li>
+              <li><a href={site.links.changelog}>{t.footer.project.changelog}</a></li>
+              <li><a href={site.links.license}>{t.footer.project.license}</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4>{t.footer.docs.title}</h4>
+            <ul>
+              <li><a href={site.links.architecture}>{t.footer.docs.architecture}</a></li>
+              <li><a href={site.links.features}>{t.footer.docs.features}</a></li>
+              <li><a href={site.links.contributing}>{t.footer.docs.contributing}</a></li>
+              <li><a href={readmeUrl}>{t.footer.docs.readme}</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4>{t.footer.help.title}</h4>
+            <ul>
+              <li><a href={site.links.newIssue}>{t.footer.help.bug}</a></li>
+              <li><a href={site.links.newIssue}>{t.footer.help.feature}</a></li>
+              <li><a href={site.links.discussions}>{t.footer.help.discussions}</a></li>
+              <li><a href={site.links.security}>{t.footer.help.security}</a></li>
+            </ul>
+          </div>
+        </div>
       </div>
-      <div>
-        <h4>{t.footer.project.title}</h4>
-        <ul>
-          <li><a href={site.repoUrl}>{t.footer.project.source}</a></li>
-          <li><a href={site.links.releases}>{t.footer.project.releases}</a></li>
-          <li><a href={site.links.blenderExtension}>{t.footer.project.extension}</a></li>
-          <li><a href={site.links.changelog}>{t.footer.project.changelog}</a></li>
-          <li><a href={site.links.license}>{t.footer.project.license}</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>{t.footer.docs.title}</h4>
-        <ul>
-          <li><a href={site.links.architecture}>{t.footer.docs.architecture}</a></li>
-          <li><a href={site.links.features}>{t.footer.docs.features}</a></li>
-          <li><a href={site.links.contributing}>{t.footer.docs.contributing}</a></li>
-          <li><a href={readmeUrl}>{t.footer.docs.readme}</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>{t.footer.help.title}</h4>
-        <ul>
-          <li><a href={site.links.newIssue}>{t.footer.help.bug}</a></li>
-          <li><a href={site.links.newIssue}>{t.footer.help.feature}</a></li>
-          <li><a href={site.links.discussions}>{t.footer.help.discussions}</a></li>
-          <li><a href={site.links.security}>{t.footer.help.security}</a></li>
-        </ul>
+      <div class="bottom">
+        <p>{t.meta.description}</p>
+        <p>{t.footer.legal}</p>
+        <p>{t.footer.copyright}</p>
       </div>
     </div>
-    <p class="faint small copy">{t.footer.copyright}</p>
   </div>
 </footer>
 
 <style>
+  /* Polarity inversion: an ink baseboard with rounded top corners closes the page. */
   .footer {
-    border-top: 1px solid var(--border);
-    padding: 3.5rem 0 2rem;
-    background: var(--bg-elev);
+    margin-top: clamp(4rem, 9vw, 7.5rem);
+    padding-inline: 0.5rem;
+  }
+  .band {
+    background: var(--ink);
+    color: var(--on-ink);
+    border-radius: var(--r-md) var(--r-md) 0 0;
+    padding: clamp(3rem, 7vw, 5rem) 0 2rem;
+  }
+  .top {
+    display: grid;
+    grid-template-columns: 1.3fr 2fr;
+    gap: 3rem;
+  }
+  .wordmark {
+    margin: 0 0 0.4rem;
+    font-size: clamp(2.25rem, 5vw, 3.5rem);
+    font-weight: var(--w-head);
+    line-height: 1;
+  }
+  .tagline {
+    margin: 0;
+    color: var(--text-faint);
+    font-size: 1.25rem;
+    font-weight: 300;
   }
   .cols {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 2rem;
   }
   h4 {
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-faint);
-    margin-bottom: 0.8rem;
+    font-size: 0.875rem;
+    font-weight: var(--w-strong);
+    color: var(--on-ink);
+    margin: 0 0 1rem;
   }
   ul {
     list-style: none;
@@ -77,30 +106,38 @@ const readmeUrl = lang === "pt" ? site.links.readmePtBr : site.links.readme;
     padding: 0;
   }
   li {
-    margin-bottom: 0.45rem;
+    margin-bottom: 0.6rem;
   }
   li a {
-    color: var(--text-muted);
+    color: var(--text-faint);
+    font-weight: var(--w-text);
+    font-size: 0.9375rem;
+    text-decoration: none;
+    transition: color 0.15s ease;
   }
   li a:hover {
-    color: var(--text);
+    color: var(--on-ink);
   }
-  .small {
-    font-size: 0.85rem;
-  }
-  .copy {
-    margin-top: 2.5rem;
+  .bottom {
+    display: grid;
+    gap: 0.35rem;
+    margin-top: 3.5rem;
     padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--ink-soft);
+    color: var(--text-muted);
+    font-size: 0.8125rem;
   }
-  @media (max-width: 860px) {
-    .cols {
-      grid-template-columns: 1fr 1fr;
+  .bottom p {
+    margin: 0;
+  }
+  @media (max-width: 900px) {
+    .top {
+      grid-template-columns: 1fr;
     }
   }
   @media (max-width: 520px) {
     .cols {
-      grid-template-columns: 1fr;
+      grid-template-columns: 1fr 1fr;
     }
   }
 </style>

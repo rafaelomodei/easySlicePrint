@@ -67,15 +67,14 @@ const isVideoPlaceholder = slot.placeholder && slot.kind !== "image";
 </figure>
 
 <style>
+  /* Footage is the only colour on the page: flat tiles, no shadow, 24px corners. */
   .media {
     position: relative;
     margin: 0;
     width: 100%;
-    border-radius: var(--radius);
+    border-radius: var(--r-md);
     overflow: hidden;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow);
+    background: var(--canvas-soft);
   }
   .media > img,
   .media > video,
@@ -87,13 +86,17 @@ const isVideoPlaceholder = slot.placeholder && slot.kind !== "image";
   }
   figcaption {
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    padding: 0.5rem 0.9rem;
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    background: linear-gradient(transparent, rgba(13, 15, 20, 0.85));
+    left: 50%;
+    bottom: 0.9rem;
+    transform: translateX(-50%);
+    padding: 0.35rem 0.8rem;
+    border-radius: var(--r-full);
+    font-size: 0.75rem;
+    font-weight: var(--w-strong);
+    color: var(--on-ink);
+    background: var(--overlay);
+    backdrop-filter: blur(8px);
+    white-space: nowrap;
   }
   .overlay {
     position: absolute;
@@ -105,40 +108,42 @@ const isVideoPlaceholder = slot.placeholder && slot.kind !== "image";
     gap: 0.6rem;
     padding: 1rem;
     text-align: center;
-    background: rgba(13, 15, 20, 0.35);
   }
   .play {
-    width: 64px;
-    height: 64px;
+    width: 60px;
+    height: 60px;
     display: grid;
     place-items: center;
     border-radius: 50%;
-    background: rgba(255, 138, 61, 0.9);
-    color: #17110b;
-    box-shadow: 0 10px 30px rgba(255, 122, 40, 0.4);
+    background: var(--canvas);
+    color: var(--ink);
+  }
+  .play svg {
+    margin-left: 3px;
   }
   .large .play {
-    width: 84px;
-    height: 84px;
+    width: 80px;
+    height: 80px;
+  }
+  .badge,
+  .expects {
+    border-radius: var(--r-full);
+    background: var(--overlay);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: var(--on-ink);
   }
   .badge {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 0.3rem 0.7rem;
-    border-radius: 999px;
-    background: rgba(13, 15, 20, 0.85);
-    border: 1px solid var(--border);
-    color: var(--text);
+    padding: 0.35rem 0.8rem;
+    font-size: 0.75rem;
+    font-weight: var(--w-strong);
   }
   .expects {
-    max-width: 34ch;
+    max-width: 38ch;
+    padding: 0.35rem 0.9rem;
     font-size: 0.78rem;
-    color: var(--text-muted);
-    background: rgba(13, 15, 20, 0.7);
-    padding: 0.25rem 0.6rem;
-    border-radius: 6px;
+    line-height: 1.4;
+    border-radius: var(--r-sm);
   }
   .large .expects {
     font-size: 0.85rem;

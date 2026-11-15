@@ -120,20 +120,23 @@ def quick_cut_steps(context, target, contacts):
     finally:
         plan.restore_visibility(target, state)
     la, lb = cutting.side_labels(mesh_utils.mesh_centroid(a.data), mesh_utils.mesh_centroid(b.data))
-    a.name = f"{target.name}_{la}"
-    b.name = f"{target.name}_{lb}"
-    a.data.name = a.name
-    b.data.name = b.name
-    for o in (a, b):
-        o["esp_base"] = base_name
+    sides = []
+    for half, label in ((a, la), (b, lb)):
+        pieces = mesh_utils.separate_parts(context, half) if settings.separate_parts else [half]
+        for k, o in enumerate(pieces, start=1):
+            o.name = f"{target.name}_{label}" if len(pieces) == 1 else f"{target.name}_{label}_{k}"
+            o.data.name = o.name
+            o["esp_base"] = base_name
+        sides.append(pieces)
+    a, b = sides[0][0], sides[1][0]
     if settings.keep_original:
         plan.move_to_backup(scene, target)
     else:
         mesh_utils.remove_object(target)
     for o in context.view_layer.objects:
         o.select_set(False)
-    a.select_set(True)
-    b.select_set(True)
+    for o in sides[0] + sides[1]:
+        o.select_set(True)
     context.view_layer.objects.active = a
     return a, b, secs
 
@@ -182,8 +185,9 @@ class CutToolBase(jobs.JobMixin):
         self.diag = mesh_utils.object_world_diagonal(self.target)
         mn, mx = mesh_utils.object_world_bounds(self.target)
         self.bcenter = (mn + mx) * 0.5
-        self.contacts_needed = 2 if settings.two_contact else 1
+        self.multi = settings.multi_contact  # any number of contacts, Enter to finish
         self.contacts = []
+        self.strokes = []  # how many contacts each stroke added, so Ctrl+Z takes a stroke back
         self.mouse = (0, 0)
         self.reset_stroke()
         self._handle = bpy.types.SpaceView3D.draw_handler_add(self._draw_cb, (context,), 'WINDOW', 'POST_PIXEL')
@@ -242,7 +246,10 @@ class CutToolBase(jobs.JobMixin):
             return {'CANCELLED'}
         result = None
         if event.type in {'RET', 'NUMPAD_ENTER'} and event.value == 'PRESS':
-            result = self.on_confirm(context)
+            if self.multi and self.idle():
+                result = self.finish_contacts(context)
+            else:
+                result = self.on_confirm(context)
         elif event.type == 'LEFTMOUSE':
             if self.nav_drag(context, event):
                 return {'PASS_THROUGH'}
@@ -263,9 +270,53 @@ class CutToolBase(jobs.JobMixin):
         if bpy.context.region is None or bpy.context.region.as_pointer() != self.region.as_pointer():
             return
         try:
+            self.draw_contacts()
             self.draw(context)
         except Exception:
             pass
+
+    def draw_contacts(self):
+        """The contacts already drawn, so the next one is placed against them."""
+        for data in self.contacts:
+            if data.points:
+                pts = [self.to2d(p) for p in data.points]
+                pts = [p for p in pts if p is not None]
+                if len(pts) >= 2:
+                    draw.lines_2d(pts, draw.GREEN, 2.0, closed=data.kind == 'FREEHAND')
+            elif data.verts:
+                # a plane section: its edges, so each region the plane cuts shows where
+                # it will be cut (seen edge on, a flat section is a line across the leg)
+                pts2 = [self.to2d(v) for v in data.verts]
+                edges = set()
+                for f in data.faces[:2000]:
+                    for k in range(len(f)):
+                        e = (f[k], f[(k + 1) % len(f)])
+                        edges.add(e if e[0] < e[1] else (e[1], e[0]))
+                for i, j in edges:
+                    if pts2[i] is not None and pts2[j] is not None:
+                        draw.lines_2d([pts2[i], pts2[j]], draw.GREEN, 2.5)
+            a = self.to2d(data.anchor)
+            if a is not None:
+                draw.points_2d([a], draw.WHITE, 8.0)
+
+    # -- contacts -------------------------------------------------------------
+    def idle(self):
+        """No stroke in progress: Enter and Ctrl+Z then act on the contacts."""
+        return not (self.drawing or self.start2d is not None or self.stroke or self.loop)
+
+    def finish_contacts(self, context):
+        if not self.contacts:
+            self.report({'WARNING'}, "Draw a contact first")
+            return None
+        return self.finish(context)
+
+    def drop_contact(self, context):
+        """Take back the last stroke: every contact it made (a plane across three legs makes three)."""
+        if not self.contacts:
+            return
+        n = self.strokes.pop() if self.strokes else 1
+        del self.contacts[-n:]
+        self.update_status(context)
 
     # -- helpers --------------------------------------------------------------
     def view_dir(self, coord):
@@ -316,20 +367,27 @@ class CutToolBase(jobs.JobMixin):
         return min(ts), max(ts)
 
     def contact_label(self):
-        if self.contacts_needed == 1:
+        if not self.multi:
             return ""
-        return f" [contact {len(self.contacts) + 1}/{self.contacts_needed}]"
+        n = len(self.contacts)
+        if not n:
+            return " [contact 1]"
+        return f" [contact {n + 1} - Enter: cut the {n} drawn]"
 
     def update_status(self, context):
-        context.workspace.status_text_set(self.status_text() + "  |  RMB / Esc: cancel  |  MMB: orbit")
+        extra = "  |  Enter (no stroke): finish  |  Ctrl+Z (no stroke): drop last contact" if self.multi else ""
+        context.workspace.status_text_set(self.status_text() + extra + "  |  RMB / Esc: cancel  |  MMB: orbit")
         try:
             self.area.header_text_set(f"EasySlice: {self.header_text()}{self.contact_label()}")
         except Exception:
             pass
 
-    def contact_done(self, context, data):
+    def contact_done(self, context, data, extra=()):
+        """`data` and any `extra` contacts the same stroke made (one per region it crossed)."""
+        self.contacts.extend(extra)
         self.contacts.append(data)
-        if len(self.contacts) >= self.contacts_needed:
+        self.strokes.append(len(extra) + 1)
+        if not self.multi:
             return self.finish(context)
         self.reset_stroke()
         self.update_status(context)
@@ -371,8 +429,10 @@ class CutToolBase(jobs.JobMixin):
             self.report({'ERROR'}, str(payload) + failed_note(payload))
             return {'CANCELLED'}
         a, b, secs = payload
-        settings.last_message = f"Cut done in {secs:.2f}s"
-        self.report({'INFO'}, f"Cut completed in {secs:.2f}s: {a.name} / {b.name}. Ctrl+Z to undo.")
+        n = len(context.selected_objects)
+        settings.last_message = f"Cut done in {secs:.2f}s ({n} parts)"
+        names = f"{a.name} / {b.name}" if n == 2 else f"{n} parts"
+        self.report({'INFO'}, f"Cut completed in {secs:.2f}s: {names}. Ctrl+Z to undo.")
         return self.chain_or_finish(context)
 
     # -- overridable ------------------------------------------------------------
@@ -389,6 +449,8 @@ class CutToolBase(jobs.JobMixin):
         return None
 
     def on_key(self, context, event):
+        if self.idle() and (event.type == 'BACK_SPACE' or (event.type == 'Z' and event.ctrl)):
+            self.drop_contact(context)
         return None
 
     def draw(self, context):
@@ -478,6 +540,11 @@ class ESP_OT_cut_straight(CutToolBase, bpy.types.Operator):
             depth_axis = n.cross(u.normalized()).normalized()
             depth = self.model_span(context, sample_segment(p0, p1, 17), c, depth_axis) or self.bbox_span(c, depth_axis)
             data.verts, data.faces = surfaces.rect_patch(c, n, u, half + margin, (depth[0] - margin, depth[1] + margin))
+        if self.multi:
+            # one stroke across several separate regions (three legs): a contact, and so
+            # a connector, for each of them
+            pieces = plan.split_straight_contact(context, self.target, data)
+            return self.contact_done(context, pieces[-1], pieces[:-1])
         return self.contact_done(context, data)
 
     def draw(self, context):
@@ -689,7 +756,10 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
         if event.type == 'C':
             return self.on_confirm(context)
         if event.type == 'BACK_SPACE' or (event.type == 'Z' and event.ctrl):
-            self.undo_stroke(context)
+            if self.loop:
+                self.undo_stroke(context)
+            else:
+                self.drop_contact(context)
         return None
 
     def undo_stroke(self, context):

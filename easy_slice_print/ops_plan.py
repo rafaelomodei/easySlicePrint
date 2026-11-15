@@ -103,7 +103,7 @@ class ESP_OT_select_pin(bpy.types.Operator):
         "or Tab into edit mode and reshape it - the build uses the shape you leave behind"
     )
     bl_options = {'REGISTER', 'UNDO'}
-    index: IntProperty(default=0)
+    index: IntProperty(default=-1, description="Contact to select (0-based); -1: the one picked in the panel")
 
     @classmethod
     def poll(cls, context):
@@ -111,8 +111,11 @@ class ESP_OT_select_pin(bpy.types.Operator):
 
     def execute(self, context):
         rec = active_record(context)
-        name = rec.pin_a if self.index == 0 else rec.pin_b
-        pin = bpy.data.objects.get(name)
+        if not plan.contact_count(rec):
+            self.report({'WARNING'}, "This cut has no connector preview")
+            return {'CANCELLED'}
+        i = plan.contact_index(rec, None if self.index < 0 else self.index)
+        pin = bpy.data.objects.get(rec.contacts[i].pin)
         if pin is None:
             self.report({'WARNING'}, "This cut has no connector preview")
             return {'CANCELLED'}
@@ -142,10 +145,13 @@ def edit_surface_of(rec, index):
     """The preview surface of contact `index` and whether it is edited by its points.
 
     A plane is moved as an object (G/R/S); a curve or freehand surface is reshaped
-    point by point. Each contact of a two-contact cut has a surface of its own, and
-    is edited on its own.
+    point by point. Each contact of a multi-contact cut has a surface of its own, and
+    is edited on its own. `index` past the last contact falls back to the last one;
+    None means the contact picked in the panel.
     """
-    name = rec.surface_b if index == 1 and rec.two_contact else rec.surface_a
+    if not plan.contact_count(rec):
+        return None, False
+    name = rec.contacts[plan.contact_index(rec, index)].surface
     sobj = bpy.data.objects.get(name) if name else None
     if sobj is None:
         return None, False
@@ -158,11 +164,11 @@ class ESP_OT_edit_surface(bpy.types.Operator):
     bl_description = (
         "Plane cut: selects the cut plane (G/R/S). Curve/Freehand: drag the control points; "
         "Ctrl+LMB add, X delete, G slide all, R reset, Ctrl+Z undo, Enter/Esc finish. "
-        "A two-contact cut edits one contact at a time"
+        "A multi-contact cut edits one contact at a time"
     )
     bl_options = {'REGISTER', 'UNDO'}
     HOVER_PX = 12.0
-    index: IntProperty(default=0, description="Which contact of a two-contact cut to edit")
+    index: IntProperty(default=-1, description="Contact to edit (0-based); -1: the one picked in the panel")
 
     @classmethod
     def poll(cls, context):
@@ -171,7 +177,7 @@ class ESP_OT_edit_surface(bpy.types.Operator):
     def invoke(self, context, event):
         rec = active_record(context)
         self.rec = rec
-        sobj, by_points = edit_surface_of(rec, self.index)
+        sobj, by_points = edit_surface_of(rec, None if self.index < 0 else self.index)
         if sobj is None:
             self.report({'ERROR'}, "Preview surface not found")
             return {'CANCELLED'}
@@ -500,6 +506,9 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
             bpy.data.collections.remove(col)
             raise cutting.CutError("Nothing was cut")
         yield "finishing"
+        if s.separate_parts:
+            # after every cut, so a later cut across several feet still reaches them all
+            made = [p for o in made for p in mesh_utils.separate_parts(context, o)]
         numbers = {}
         for o in sorted(made, key=lambda o: o.name):
             stem = o.get("esp_stem", base.name)

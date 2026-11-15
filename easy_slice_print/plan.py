@@ -226,6 +226,46 @@ def fill_straight_contact(data, patch, span):
     data.regions_skipped = patch.islands - patch.kept
 
 
+def split_straight_contact(context, target, data):
+    """One contact per region a plane contact cuts through. -> [ContactData, ...]
+
+    A plane drawn once across three legs sections three separate regions, and as a
+    single contact it gets a single connector - in the thickest leg - while the other
+    two print with nothing to line them up. Split, each region is a contact of its
+    own: its own surface, its own cutter and its own pin, as if it had been drawn on
+    its own. Each one keeps no stroke span, only a point inside its region (the
+    centre of the largest circle that fits in it), so a section taken again after the
+    plane is moved finds that region and no other.
+
+    A contact that crosses one region, or that is not a model section, comes back as is.
+    """
+    if not data.is_cut_face or data.plane_co is None or not data.verts:
+        return [data]
+    pieces = section.split_patch(data.verts, data.faces)
+    if len(pieces) < 2:
+        return [data]
+    covered = data.regions_skipped  # regions the stroke missed altogether stay missed
+    out = []
+    for verts, faces in pieces:
+        found = section.inscribed_circle(verts, faces, data.plane_no)
+        if found is None:
+            continue
+        centre = found[0]
+        patch = straight_section(context, target, data.plane_co, data.plane_no, None, centre)
+        if patch is None or patch.kept != 1:
+            continue
+        one = ContactData('STRAIGHT')
+        one.view_dir = data.view_dir
+        one.plane_co = data.plane_co
+        one.plane_no = data.plane_no
+        one.center_hint = centre
+        one.anchor = centre
+        fill_straight_contact(one, patch, None)
+        one.regions_skipped = covered
+        out.append(one)
+    return out if len(out) >= 2 else [data]
+
+
 # ----------------------------------------------------------------------------
 # cut surfaces that follow the model (curve cuts)
 # ----------------------------------------------------------------------------
@@ -842,11 +882,25 @@ def contact_size_bu(context, src, inscribed_bu):
 
 
 def _contact_attr(rec, base, i):
-    return getattr(rec, f"{base}_{'ab'[i]}")
+    return getattr(rec.contacts[i], base)
 
 
 def _set_contact_attr(rec, base, i, value):
-    setattr(rec, f"{base}_{'ab'[i]}", value)
+    setattr(rec.contacts[i], base, value)
+
+
+def contact_tag(i):
+    """A, B, ... Z, then 27, 28 ...: the suffix that tells a cut's contacts apart."""
+    return chr(ord('A') + i) if i < 26 else str(i + 1)
+
+
+def contact_index(rec, index=None):
+    """A valid 0-based contact index: `index`, or the one picked in the panel."""
+    n = contact_count(rec)
+    if n == 0:
+        return 0
+    i = rec.active_contact - 1 if index is None else index
+    return min(max(i, 0), n - 1)
 
 
 def auto_pin_matrix(context, rec, i):
@@ -857,10 +911,12 @@ def auto_pin_matrix(context, rec, i):
 
 
 def apply_preset(context, rec):
-    """Write the preset size of contact A into the width/height fields."""
+    """Write the preset size of the first contact into the width/height fields."""
     if rec.size_preset == 'CUSTOM':
         return
-    w_mm, h_mm = preset_size_mm(context, rec.size_preset, rec.inscribed_a)
+    if not contact_count(rec):
+        return
+    w_mm, h_mm = preset_size_mm(context, rec.size_preset, rec.contacts[0].inscribed)
     rec.pin_width_mm = w_mm
     rec.pin_height_mm = h_mm
 
@@ -906,17 +962,67 @@ def copy_connector_props(src, dst):
 
 
 def contact_count(rec):
-    return 2 if rec.two_contact else 1
+    return len(rec.contacts)
 
 
 def record_objects(rec):
     out = []
-    for name in (rec.surface_a, rec.surface_b, rec.pin_a, rec.pin_b):
-        if name:
-            obj = bpy.data.objects.get(name)
+    for c in rec.contacts:
+        for name in (c.surface, c.pin):
+            obj = bpy.data.objects.get(name) if name else None
             if obj is not None:
                 out.append(obj)
     return out
+
+
+def surface_names(rec):
+    return {c.surface for c in rec.contacts if c.surface}
+
+
+_LEGACY_FIELDS = ("surface", "pin", "pin_auto", "center", "normal", "inscribed")
+
+
+def migrate_record(rec):
+    """Move a cut saved before 0.3.9 (contacts in `*_a` / `*_b` fields) into `contacts`.
+
+    -> True when something moved. Runs once per record: a migrated record has contacts,
+    and its legacy surface fields are emptied.
+    """
+    if len(rec.contacts) or not rec.surface_a:
+        return False
+    for tag in ("a", "b") if rec.two_contact else ("a",):
+        c = rec.contacts.add()
+        for base in _LEGACY_FIELDS:
+            setattr(c, base, getattr(rec, f"{base}_{tag}"))
+    rec.surface_a = rec.surface_b = ""
+    rec.pin_a = rec.pin_b = ""
+    rec.two_contact = False
+    return True
+
+
+def migrate_scenes():
+    n = 0
+    for scene in bpy.data.scenes:
+        settings = getattr(scene, "esp", None)
+        if settings is None:
+            continue
+        for rec in settings.cuts:
+            n += migrate_record(rec)
+    return n
+
+
+@persistent
+def load_post_handler(_dummy=None):
+    migrate_scenes()
+
+
+def _migrate_at_startup():
+    # register() runs before the file is reachable; the first timer tick is after it
+    try:
+        migrate_scenes()
+    except Exception:
+        pass
+    return None
 
 
 def unique_record_name(settings, prefix):
@@ -941,14 +1047,15 @@ def add_record(context, target, cut_type, contacts):
             # and rooting the plan there would undo every cut already approved
             settings.base_object = target.name
         rec = settings.cuts.add()
-        rec.name = unique_record_name(settings, "Base Split" if len(contacts) == 2 else PREFIX[cut_type])
+        rec.name = unique_record_name(settings, "Base Split" if len(contacts) > 1 else PREFIX[cut_type])
         rec.cut_type = cut_type
         rec.target = target.name
-        rec.two_contact = len(contacts) == 2
+        for _data in contacts:
+            rec.contacts.add()
         active = settings.cuts[settings.active_cut] if 0 <= settings.active_cut < len(settings.cuts) - 1 else None
         copy_connector_props(active if active is not None else settings, rec)
         for i, data in enumerate(contacts):
-            sobj = create_surface_object(context, f"ESP_Surface_{rec.name}_{'AB'[i]}", data, target)
+            sobj = create_surface_object(context, f"ESP_Surface_{rec.name}_{contact_tag(i)}", data, target)
             _set_contact_attr(rec, "surface", i, sobj.name)
             center, normal, inscribed = contact_frame(
                 context,
@@ -967,7 +1074,7 @@ def add_record(context, target, cut_type, contacts):
         apply_fit(context, rec)
         for i in range(len(contacts)):
             matrix = auto_pin_matrix(context, rec, i)
-            pin = create_pin_object(context, f"ESP_Pin_{rec.name}_{'AB'[i]}", rec.shape, matrix)
+            pin = create_pin_object(context, f"ESP_Pin_{rec.name}_{contact_tag(i)}", rec.shape, matrix)
             _set_contact_attr(rec, "pin", i, pin.name)
             _set_contact_attr(rec, "pin_auto", i, flat(matrix))
             pin.hide_viewport = not rec.add_pin
@@ -1159,6 +1266,8 @@ def set_plan_hidden(context, hidden):
 
 def record_spec(context, rec, settings, remesh=True):
     apply_fit(context, rec)
+    if not contact_count(rec):
+        raise cutting.CutError(f"'{rec.name}' has no cut surface")
     contacts = []
     shape, custom = connectors.resolve_shape(rec.shape)
     for i in range(contact_count(rec)):
@@ -1275,7 +1384,7 @@ def _refresh_dirty():
     names = list(_dirty)
     _dirty = {}
     for rec in scene.esp.cuts:
-        if rec.surface_a in names or rec.surface_b in names:
+        if surface_names(rec) & set(names):
             try:
                 refresh_record_frames(bpy.context, rec)
             except Exception:
@@ -1290,9 +1399,7 @@ def depsgraph_handler(scene, depsgraph):
         return
     changed = False
     for rec in settings.cuts:
-        for name in (rec.surface_a, rec.surface_b):
-            if not name:
-                continue
+        for name in surface_names(rec):
             obj = bpy.data.objects.get(name)
             if obj is None:
                 continue
@@ -1310,9 +1417,16 @@ def depsgraph_handler(scene, depsgraph):
 def register():
     if depsgraph_handler not in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.append(depsgraph_handler)
+    if load_post_handler not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(load_post_handler)
+    bpy.app.timers.register(_migrate_at_startup, first_interval=0.0)
 
 
 def unregister():
     if depsgraph_handler in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(depsgraph_handler)
+    if load_post_handler in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(load_post_handler)
+    if bpy.app.timers.is_registered(_migrate_at_startup):
+        bpy.app.timers.unregister(_migrate_at_startup)
     section.free_cache()

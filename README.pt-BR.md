@@ -68,7 +68,7 @@
 | **Plane Cut** (corte reto) | arraste uma linha no viewport → corte plano do tamanho da linha desenhada, não do modelo inteiro |
 | **Curve Cut** (corte curvo) | desenhe uma linha curva sobre o modelo → o corte segue a linha atravessando o modelo, indo só um pouco além do traço |
 | **Freehand Cut** (corte livre) | desenhe um laço fechado *em volta* da superfície (orbite enquanto desenha) → o laço é preenchido e vira a superfície de corte (pescoços, pulsos, qualquer lugar que um plano não alcança) |
-| **Two Contacts / Base Split** | dois contatos cortados numa só operação (ex.: os dois pés numa base), cada um com o seu conector |
+| **Multiple Contacts / Base Split** | quantos contatos você desenhar, cortados numa só operação (ex.: todos os pés de uma figura na base), cada um com o seu conector — Enter finaliza |
 | **Quick Cut** | corte final imediato, sem histórico |
 | **Plan Mode** | não destrutivo: planeje vários cortes, edite/desative/remova, mova planos e conectores, **Build** quando estiver pronto, **Back to Plan** para continuar editando, **Approve** para finalizar. O modelo original nunca é alterado |
 | **Conectores** | pino + encaixe automáticos: Cilindro, Cônico, Hexagonal, Caixa ou **malhas próprias** da sua biblioteca; presets de tamanho ou largura/altura explícitas; folga (clearance); ponta assimétrica (encaixe mais fundo); escolha de qual lado leva o pino; mova/gire/escale o conector livremente |
@@ -141,7 +141,7 @@ em *Install*. A partir daí o próprio Blender oferece cada versão nova. A list
      `Enter` / `C` de qualquer ângulo.
 5. Painel Connector: forma, tamanho, lado do pino, cut gap e o **Fit** do encaixe impresso.
 6. **Plan mode**: selecione um corte na lista para editar — *Edit Cut Surface* (G/R/S nos planos, arraste
-   pontos nas curvas; um corte de dois contatos tem o botão *2nd* para o outro contato; cada superfície de corte tem origem própria no seu centro, então `R` e `S` giram e
+   pontos nas curvas; um corte com vários contatos tem o seletor *Contact*, que escolhe qual deles é editado; cada superfície de corte tem origem própria no seu centro, então `R` e `S` giram e
    escalam em torno dela — mude *Surface Origin* para *Target Object* se preferir o pivô do modelo), *Select Connector* e G/R/S, *Reset*, *Swap* do lado do pino. Desmarque **Ready** para
    deixar um corte fora do build, o olho esconde o preview, ✕ apaga.
 7. **Build** → as peças aparecem em `ESP_Built_<nome>`. **Back to Plan** para mudar algo, **Approve** para finalizar.
@@ -175,6 +175,7 @@ Conectores precisam ser rígidos (sem articulações).
 
 ```bash
 BLENDER=/caminho/para/blender scripts/run_tests.sh   # testes headless
+/caminho/para/blender --factory-startup --enable-event-simulate --python tests/gui_smoke.py -- tmp/gui   # interface real, com prints
 BLENDER=/caminho/para/blender scripts/build.sh       # gera o zip em dist/
 BLENDER_EXTENSIONS_TOKEN=... scripts/publish_extension.sh   # envia o zip para extensions.blender.org
 ```

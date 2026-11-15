@@ -103,7 +103,7 @@ easy_slice_print/
    fallback), then loose parts are separated (C-side `mesh.separate`) and classified by the sign of
    their centroid against the first patch (BVH nearest point + normal). Side **A** is the + side.
    Parts on the same side are joined, so a plane through both arms still gives exactly two objects.
-   Two-contact cuts subtract both slabs before separating.
+   Multi-contact cuts subtract every slab before separating.
 
    When every piece lands on one side the part did not split, and before the `CutError` goes out
    the result is diagnosed (`diagnosis.diagnose`): every vertex within the kerf of the cutter
@@ -158,7 +158,7 @@ rooted there so the next build cuts the part rather than the stashed source.
 
 ## Testing
 
-`tests/test_core.py` exercises the geometry pipeline (straight/ribbon/loop/two-contact cuts,
+`tests/test_core.py` exercises the geometry pipeline (straight/ribbon/loop/multi-contact cuts,
 custom connectors, remesh) and asserts closed-manifold results. `tests/test_addon.py` registers
 the add-on, runs the full plan workflow through the real operators (build, rebuild, explode,
 export STL/OBJ/FBX, back to plan, approve), Quick mode, and draws every panel with a recording

@@ -25,13 +25,14 @@ below is an original implementation; nothing was copied.
 | Control the stroke smoothing / editable point count / surface resolution | *Smoothing*, *Control Points* and *Surface Detail* (a Curve cut); *Loop Smoothing* and *Surface Detail* for Freehand | **Stroke Settings** sub-panel of Cut Tools (`ESP_PT_stroke`) |
 | Trace a detail and have the cut land on it | a freehand loop keeps every point drawn, where it was drawn - no resample to *Control Points*, no smoothing unless asked, no spline, no push off the surface - so the cut runs through the stroke; the clearance the boolean needs is a skirt on a separate cutter | `ESP_OT_cut_freehand.close_loop`, `plan.loop_surface` |
 | Know which tool has the mouse | the pointer becomes a blade for the Plane Cut and a pencil while drawing a stroke or editing points | `ops_tools.set_cursor` |
-| Separate a figure from its base (two contacts at once) | **Two Contacts / Base Split** toggle; both contacts drawn in one go, one record `Base Split NNN` | `settings.two_contact` |
+| One plane across several separate regions | with *Multiple Contacts* on, each region the stroke crosses becomes a contact with its own connector (sized to that region) and socket; a moved plane re-sections its own region only | `plan.split_straight_contact`, `section.split_patch` |
+| Separate a figure from its base (every contact at once) | **Multiple Contacts / Base Split** toggle; draw as many contacts as the figure has feet (already drawn ones stay on screen), Enter cuts them all, Ctrl+Z drops the last; one record `Base Split NNN` with a connector per contact | `settings.multi_contact`, `ESP_CutRecord.contacts` |
 | Automatically start the next cut | **Chain Cuts** | `settings.chain_cuts` |
 | Editable list of planned cuts: enable, hide, delete, rename | **Planned Cuts** UIList (name, Ready ☑, eye; +/− beside the list) | `ESP_UL_cuts` |
 | Draft is cheap, geometry deferred to build | records store only the cut surface + pin transform; booleans run on **Build** | `plan.py`, `ESP_OT_build` |
 | Move / rotate / scale a straight cut | **Edit Cut Surface** selects the plane; G/R/S; pin follows (depsgraph handler) | `ESP_OT_edit_surface`, `plan.depsgraph_handler` |
 | Cut surface with a usable pivot | generated surfaces get their own origin at the patch centre (*Origin* in Options: Cut Surface / Target Object) | `plan.surface_origin_point` |
-| Edit curve/freehand points | point editor modal: drag, Ctrl+LMB add, X delete, G slide whole cut, R reset, Ctrl+Z undo; a two-contact cut edits each contact on its own (**Edit Cut Surface** / **2nd**) | `ESP_OT_edit_surface` |
+| Edit curve/freehand points | point editor modal: drag, Ctrl+LMB add, X delete, G slide whole cut, R reset, Ctrl+Z undo; a multi-contact cut edits each contact on its own (pick it with *Contact*) | `ESP_OT_edit_surface` |
 | Connector on/off, shape, size, width/height | Connector panel (per next cut or per selected cut; new cuts copy the selected cut's settings) | `ESP_PT_connector` |
 | Built-in + custom connector shapes | Cylinder, Tapered, Hexagon, Box + `ESP_Connectors` library (unit-box convention) | `core/connectors.py` |
 | Printed parts that actually fit together | *Printer Clearance* set once per printer in the preferences; each cut picks Press / Snug / Easy / Loose / Custom, and the panel shows how much wider the socket comes out | `ESP_Preferences.printer_clearance_mm`, `plan.apply_fit` |
@@ -39,6 +40,7 @@ below is an original implementation; nothing was copied.
 | Pin on side A or B, swap | *Pin Side* + **Swap** | `ESP_OT_swap_pin_side` |
 | Move/rotate/scale the pin manually, reset | **Select Connector** (G/R/S, or the Item panel) / **Reset** | `ESP_OT_select_pin`, `ESP_OT_reset_pin` |
 | Cut gap / kerf in mm | *Cut Gap* (Options; per selected cut in Plan Mode) → kerf slab subtracted before splitting | `surfaces.slab_from_patch` |
+| Each loose piece its own part | *Separate Loose Parts* (Options, on): a base split gives the top and every foot as separate objects; a cavity's inner wall stays with its part | `mesh_utils.part_groups`, `mesh_utils.separate_parts` |
 | Keep the source model | **Keep Original** → hidden in `ESP_Backup` | `plan.move_to_backup` |
 | Continue after a failed cut | **Skip Failed Cuts** | `ESP_OT_build` |
 | See why a cut failed | a cut that leaves the part in one piece paints the cut surface red where the halves stay joined and green where the cut goes through, all red when none of it reaches the model (*Show Why a Cut Failed* to turn it off, **✕** in the sidebar to hide) | `core/diagnosis.py`, `overlay.py`, `ESP_OT_hide_diagnosis` |

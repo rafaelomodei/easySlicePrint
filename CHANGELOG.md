@@ -6,6 +6,43 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Any number of contacts.** *Two Contacts / Base Split* is now **Multiple Contacts / Base
+  Split**: draw a contact for every foot, leg or tab that holds the figure to its base, then press
+  **Enter** to cut them all as one operation, each with its own connector. The contacts already
+  drawn stay on screen in green while you place the next, and **Ctrl+Z** with no stroke in
+  progress drops the last one. In Plan Mode the edit box gets a *Contact* picker that tells
+  *Edit Cut Surface* and *Select Connector* which contact to work on (it replaces the *2nd*
+  buttons).
+- **One plane, a connector per region.** With *Multiple Contacts* on, a Plane stroke drawn once
+  across separate regions - three legs of a stool, the four legs of a table seen from the side,
+  a hollow leg next to a solid one - makes a contact of each region: its own cut surface, its
+  own connector sized to that region, its own socket. Moving one of those planes later
+  re-sections its own region only. While drawing, the contacts already made are outlined in
+  green where they will cut, and **Ctrl+Z** takes back the whole last stroke, every region it
+  added.
+- **Separate Loose Parts** (*Options*, on by default). Every piece that comes out loose is a part
+  of its own: a base split across three legs gives the top and three feet - four objects ready
+  for the slicer - instead of the top and one object holding all three feet. A closed shell
+  inside another (the wall of a cavity) stays with the part around it; a piece loose inside a
+  cavity is a part again. In Plan Mode it happens once every cut is done, so a later cut across
+  several feet still reaches them all; in Quick mode a side that comes apart is named
+  `_LOWER_1`, `_LOWER_2` ...
+- `tests/gui_smoke.py` drives the real Blender UI with simulated input (needs a display) and
+  saves screenshots.
+
+### Fixed
+- A cut with several contacts that do not share a plane - two curves round two legs, two
+  freehand loops - sorted every piece by the first contact alone: the second leg's foot was
+  measured against the first leg's ribbon, landed on the wrong side, and the build reported
+  success with the model whole and an empty part. Each piece is now judged by the contact
+  surface nearest to it.
+
+### Changed
+- Cut records keep their contacts in a list. A `.blend` saved by an earlier version is moved
+  over when it is opened: its two-contact cuts keep both surfaces, both connectors and any
+  manual connector edits.
+
 ## [0.3.8-alpha] - 2026-11-14
 
 ### Changed

@@ -470,12 +470,29 @@ def _freehand_patch(obj, loop, margin, smoothing=0.0, control_points=None, detai
     if pushed:
         boundary = None
         if clear:
-            pts = plan.clear_of_model(bpy.context, obj, pts, margin)
-            boundary = plan.clear_of_model(bpy.context, obj, surfaces.loop_boundary(pts, detail), margin)
+            pts = _clear_of_model(bpy.context, obj, pts, margin)
+            boundary = _clear_of_model(bpy.context, obj, surfaces.loop_boundary(pts, detail), margin)
         verts, faces = surfaces.loop_patch(pts, detail=detail, boundary=boundary)
         return verts, faces, rim, (verts, faces)
     verts, faces, cutter = plan.loop_surface(bpy.context, obj, pts, detail, margin)
     return verts, faces, rim, cutter
+
+
+def _clear_of_model(context, target, points, margin):
+    """The rim pipeline the tool replaced: lift each point out of the model by `margin`.
+
+    The add-on no longer does this to a rim (it put the cut face off a traced crease;
+    the clearance is a skirt on the cutter now). Kept here so the test can measure the
+    two pipelines against each other.
+    """
+    if target is None or context is None or margin <= 0.0:
+        return [Vector(p) for p in points]
+    state = plan.ensure_evaluable(target)
+    try:
+        depsgraph = context.evaluated_depsgraph_get()
+        return [plan._clear_point(target, p, margin, depsgraph) for p in points]
+    finally:
+        plan.restore_visibility(target, state)
 
 
 def _depths(obj, points):

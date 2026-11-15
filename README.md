@@ -8,7 +8,8 @@
 <p align="center">
   <a href="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/rafaelomodei/easySlicePrint/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/rafaelomodei/easySlicePrint/releases"><img alt="Release" src="https://img.shields.io/github/v/release/rafaelomodei/easySlicePrint?include_prereleases"></a>
-  <a href="https://extensions.blender.org/approval-queue/easy-slice-print/"><img alt="Blender Extensions" src="https://img.shields.io/badge/Blender%20Extensions-in%20review-orange"></a>
+  <a href="https://extensions.blender.org/add-ons/easy-slice-print/"><img alt="Blender Extensions" src="https://img.shields.io/badge/Blender%20Extensions-available-brightgreen"></a>
+  <a href="https://ko-fi.com/rafaelomodei"><img alt="Ko-fi" src="https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-ff5e5b?logo=ko-fi&logoColor=white"></a>
   <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-yellow">
   <img alt="Blender 4.2 – 5.2" src="https://img.shields.io/badge/Blender-4.2%20%E2%80%93%205.2-orange">
   <a href="LICENSE"><img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue"></a>
@@ -18,7 +19,7 @@
 <p align="center">
   <a href="https://rafaelomodei.github.io/easySlicePrint/"><strong>Website</strong></a> ·
   <a href="https://github.com/rafaelomodei/easySlicePrint/releases/latest"><strong>Download</strong></a> ·
-  <a href="https://extensions.blender.org/approval-queue/easy-slice-print/"><strong>Blender Extensions</strong></a> ·
+  <a href="https://extensions.blender.org/add-ons/easy-slice-print/"><strong>Blender Extensions</strong></a> ·
   <em>Português: veja <a href="README.pt-BR.md">README.pt-BR.md</a></em>
 </p>
 
@@ -82,8 +83,7 @@ Tested headless on Blender 4.2.23 LTS and 5.2.1 LTS (CI runs both). Works on Win
 
 **From Blender.** *Edit → Preferences → Get Extensions*, search for **EasySlice Print**, click
 *Install*. Blender then offers every new version by itself. The listing is
-[on extensions.blender.org](https://extensions.blender.org/approval-queue/easy-slice-print/)
-and is still going through the platform's review, so until it is approved use the zip below.
+[on extensions.blender.org](https://extensions.blender.org/add-ons/easy-slice-print/).
 
 **From the zip.**
 
@@ -196,6 +196,16 @@ deployed to GitHub Pages by `.github/workflows/pages.yml`).
 
 Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
 Security issues: see [SECURITY.md](SECURITY.md).
+
+## Support the project
+
+EasySlice Print is free and stays free. If it saved you time:
+
+* **Leave a rating** on [Blender Extensions](https://extensions.blender.org/add-ons/easy-slice-print/reviews/) — reviews are how other people find it.
+* **Buy me a coffee** on [Ko-fi](https://ko-fi.com/rafaelomodei).
+* Report bugs and ideas in the [issues](https://github.com/rafaelomodei/easySlicePrint/issues).
+
+Both links are also in the add-on: *Sidebar → EasySlice → Support EasySlice* and in its preferences.
 
 ## License
 

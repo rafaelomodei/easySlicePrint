@@ -288,10 +288,6 @@ def apply_connectors_steps(context, mesh_a, mesh_b, spec):
         mesh_utils.remove_mesh(half)
 
 
-def apply_connectors(context, mesh_a, mesh_b, spec):
-    return drain(apply_connectors_steps(context, mesh_a, mesh_b, spec))
-
-
 def remesh_mesh(context, mesh, voxel, adaptivity, smooth):
     scene = context.scene
     obj = mesh_utils.new_temp_object(scene, mesh, "_esp_remesh")

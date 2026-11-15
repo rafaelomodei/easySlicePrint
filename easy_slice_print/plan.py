@@ -411,27 +411,6 @@ def _clear_point(target, p, margin, depsgraph):
     return p
 
 
-def clear_of_model(context, target, points, margin):
-    """Move each point out of the model until it clears the surface by `margin`.
-
-    The tool no longer does this to a rim: a point the user drew is where the cut goes,
-    and lifting it off the surface - along one normal at a time, which in a crease
-    bounces the point between the two faces that meet there and carries it millimetres
-    out of the crease - is what put the cut face off the traced line. The clearance is
-    a skirt on the cutter now (`skirt_ring`, which lifts skirt vertices with the same
-    `_clear_point`). This is kept as the pipeline it replaced, so a test can measure
-    the two against each other.
-    """
-    if target is None or context is None or margin <= 0.0:
-        return [Vector(p) for p in points]
-    state = ensure_evaluable(target)
-    try:
-        depsgraph = context.evaluated_depsgraph_get()
-        return [_clear_point(target, p, margin, depsgraph) for p in points]
-    finally:
-        restore_visibility(target, state)
-
-
 def settle_on_model(context, target, points, detail):
     """The rim: the drawn points, subdivided, and put onto the surface between them.
 
@@ -1046,13 +1025,6 @@ def user_delta(auto, current):
     """
     d = _frame(auto).inverted_safe() @ current @ _scale(auto).inverted_safe()
     return Matrix.Identity(4) if _is_identity(d) else d
-
-
-def user_moved_pin(rec, i):
-    pin = bpy.data.objects.get(_contact_attr(rec, "pin", i))
-    if pin is None:
-        return False
-    return not _is_identity(user_delta(unflat(_contact_attr(rec, "pin_auto", i)), pin.matrix_basis))
 
 
 def reset_pins(context, rec):

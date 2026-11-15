@@ -226,6 +226,46 @@ def fill_straight_contact(data, patch, span):
     data.regions_skipped = patch.islands - patch.kept
 
 
+def split_straight_contact(context, target, data):
+    """One contact per region a plane contact cuts through. -> [ContactData, ...]
+
+    A plane drawn once across three legs sections three separate regions, and as a
+    single contact it gets a single connector - in the thickest leg - while the other
+    two print with nothing to line them up. Split, each region is a contact of its
+    own: its own surface, its own cutter and its own pin, as if it had been drawn on
+    its own. Each one keeps no stroke span, only a point inside its region (the
+    centre of the largest circle that fits in it), so a section taken again after the
+    plane is moved finds that region and no other.
+
+    A contact that crosses one region, or that is not a model section, comes back as is.
+    """
+    if not data.is_cut_face or data.plane_co is None or not data.verts:
+        return [data]
+    pieces = section.split_patch(data.verts, data.faces)
+    if len(pieces) < 2:
+        return [data]
+    covered = data.regions_skipped  # regions the stroke missed altogether stay missed
+    out = []
+    for verts, faces in pieces:
+        found = section.inscribed_circle(verts, faces, data.plane_no)
+        if found is None:
+            continue
+        centre = found[0]
+        patch = straight_section(context, target, data.plane_co, data.plane_no, None, centre)
+        if patch is None or patch.kept != 1:
+            continue
+        one = ContactData('STRAIGHT')
+        one.view_dir = data.view_dir
+        one.plane_co = data.plane_co
+        one.plane_no = data.plane_no
+        one.center_hint = centre
+        one.anchor = centre
+        fill_straight_contact(one, patch, None)
+        one.regions_skipped = covered
+        out.append(one)
+    return out if len(out) >= 2 else [data]
+
+
 # ----------------------------------------------------------------------------
 # cut surfaces that follow the model (curve cuts)
 # ----------------------------------------------------------------------------

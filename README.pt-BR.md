@@ -175,6 +175,7 @@ Conectores precisam ser rígidos (sem articulações).
 
 ```bash
 BLENDER=/caminho/para/blender scripts/run_tests.sh   # testes headless
+/caminho/para/blender --factory-startup --enable-event-simulate --python tests/gui_smoke.py -- tmp/gui   # interface real, com prints
 BLENDER=/caminho/para/blender scripts/build.sh       # gera o zip em dist/
 BLENDER_EXTENSIONS_TOKEN=... scripts/publish_extension.sh   # envia o zip para extensions.blender.org
 ```

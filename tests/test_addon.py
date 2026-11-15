@@ -891,6 +891,7 @@ def test_tool_collects_any_number_of_contacts():
         def __init__(self, multi):
             self.multi = multi
             self.contacts = []
+            self.strokes = []
             self.finished = None
             self.reset_stroke()
 
@@ -912,12 +913,182 @@ def test_tool_collects_any_number_of_contacts():
     check(many.idle() and many.finished is None, "nothing cut until Enter")
     many.drop_contact(None)
     check(many.contacts == ["c1", "c2", "c3"], "Ctrl+Z with no stroke drops the last contact")
+    check(many.contact_done(None, "p3", ["p1", "p2"]) is None, "a plane across three regions adds three contacts")
+    many.drop_contact(None)
+    check(many.contacts == ["c1", "c2", "c3"], "Ctrl+Z takes back the whole stroke, all three")
     many.stroke = [(0, 0), (5, 5)]
     check(not many.idle(), "a stroke in progress is not idle (Enter / Ctrl+Z act on the stroke)")
     many.reset_stroke()
     check(many.finish_contacts(None) == {'FINISHED'} and many.finished == ["c1", "c2", "c3"], "Enter cuts all three")
     empty = Tool(multi=True)
     check(empty.finish_contacts(None) is None and empty.finished is None, "Enter with nothing drawn does nothing")
+
+
+def _box_bm(bm, centre, size):
+    bmesh.ops.create_cube(bm, size=1.0, matrix=Matrix.Translation(centre) @ Matrix.Diagonal((*size, 1.0)))
+
+
+def _cyl_bm(bm, centre, radius, depth, segments=32):
+    bmesh.ops.create_cone(
+        bm,
+        cap_ends=True,
+        cap_tris=True,
+        segments=segments,
+        radius1=radius,
+        radius2=radius,
+        depth=depth,
+        matrix=Matrix.Translation(centre),
+    )
+
+
+def solid(name, build):
+    """A mesh object from a bmesh-building function, not yet unioned."""
+    bm = bmesh.new()
+    build(bm)
+    obj = bpy.data.objects.new(name, mesh_utils.bmesh_to_mesh(bm, name))
+    bm.free()
+    bpy.context.scene.collection.objects.link(obj)
+    return obj
+
+
+def fuse(name, objects, subtract=()):
+    """Union `objects` (minus `subtract`) into one closed mesh object called `name`."""
+    ctx = bpy.context
+    me = mesh_utils.world_mesh_copy(ctx, objects[0], "_f0")
+    for i, o in enumerate(objects[1:]):
+        me = mesh_utils.boolean_mesh(ctx, me, mesh_utils.world_mesh_copy(ctx, o, f"_f{i + 1}"), 'UNION', 'EXACT')
+    for i, o in enumerate(subtract):
+        me = mesh_utils.boolean_mesh(ctx, me, mesh_utils.world_mesh_copy(ctx, o, f"_s{i}"), 'DIFFERENCE', 'EXACT')
+    for o in list(objects) + list(subtract):
+        mesh_utils.remove_object(o)
+    mesh_utils.cleanup_temp(ctx.scene)
+    obj = bpy.data.objects.new(name, me)
+    ctx.scene.collection.objects.link(obj)
+    ctx.view_layer.objects.active = obj
+    obj.select_set(True)
+    ctx.view_layer.update()
+    return obj
+
+
+def table(name, legs, top=(70, 40, 10), top_z=45.0):
+    """A slab on legs. `legs`: [(kind, x, y, size)], kind 'BOX' (side) or 'CYL' (radius) or 'TUBE' (radius)."""
+    parts = [solid(f"{name}_top", lambda bm: _box_bm(bm, (0, 0, top_z), top))]
+    holes = []
+    for i, (kind, x, y, size) in enumerate(legs):
+        if kind == 'BOX':
+            parts.append(solid(f"{name}_l{i}", lambda bm, x=x, y=y, k=size: _box_bm(bm, (x, y, 20), (k, k, 42))))
+        else:
+            parts.append(solid(f"{name}_l{i}", lambda bm, x=x, y=y, r=size: _cyl_bm(bm, (x, y, 20), r, 42)))
+            if kind == 'TUBE':
+                holes.append(solid(f"{name}_h{i}", lambda bm, x=x, y=y, r=size: _cyl_bm(bm, (x, y, 14), r * 0.55, 40)))
+    return fuse(name, parts, holes)
+
+
+def plane_stroke(obj, z, x0, x1):
+    """What the Plane tool builds for a horizontal line from x0 to x1 at height z, seen from the front."""
+    c = Vector(((x0 + x1) * 0.5, 0.0, z))
+    n = Vector((0.0, 0.0, 1.0))
+    half = abs(x1 - x0) * 0.5
+    span = (Vector((1.0, 0.0, 0.0)), -half, half)
+    d = plan.ContactData('STRAIGHT')
+    d.view_dir = Vector((0.0, 1.0, 0.0))
+    d.plane_co = c
+    d.plane_no = n
+    d.center_hint = c
+    d.anchor = c
+    patch = plan.straight_section(bpy.context, obj, c, n, span, c)
+    check(patch is not None, f"{obj.name}: the plane sections the model")
+    plan.fill_straight_contact(d, patch, span)
+    return d
+
+
+def pins_under(part, below_z, legs):
+    """Which legs have material of `part` hanging below `below_z`, and how much hangs elsewhere."""
+    pts = [part.matrix_world @ v.co for v in part.data.vertices]
+    pts = [p for p in pts if p.z < below_z]
+    hit = []
+    for _kind, x, y, size in legs:
+        hit.append(any((p.xy - Vector((x, y))).length < size for p in pts))
+    stray = [p for p in pts if all((p.xy - Vector((x, y))).length >= size for _k, x, y, size in legs)]
+    return hit, stray
+
+
+def test_one_plane_many_regions():
+    """Multiple Contacts: one plane stroke across separate regions gives a connector to each."""
+    print("== one plane stroke, many regions")
+    sc = reset_scene()
+    s = sc.esp
+    s.mode = 'PLAN'
+    ctx = bpy.context
+    z = 15.0
+    scenarios = [
+        ("Stool", [('BOX', x, 0, 10) for x in (-25, 0, 25)], 3),
+        ("Grid", [('BOX', x, y, 9) for x in (-22, 22) for y in (-12, 12)], 4),
+        ("Mixed", [('CYL', -24, 0, 4), ('CYL', 0, 0, 7), ('CYL', 25, 0, 11)], 3),
+        ("Hollow", [('TUBE', -18, 0, 9), ('CYL', 20, 0, 6)], 2),
+    ]
+    for name, legs, expect in scenarios:
+        reset_scene()
+        sc = bpy.context.scene
+        s = sc.esp
+        s.mode = 'PLAN'
+        obj = table(name, legs)
+        non, boundary, _t = mesh_utils.manifold_report(obj.data)
+        check(non == 0 and boundary == 0, f"{name}: closed manifold")
+        whole = plane_stroke(obj, z, -40.0, 40.0)
+        contacts = plan.split_straight_contact(ctx, obj, whole)
+        check(len(contacts) == expect, f"{name}: {expect} regions -> {len(contacts)} contacts")
+        rec = plan.add_record(ctx, obj, 'STRAIGHT', contacts)
+        centres = [Vector(c.center) for c in rec.contacts]
+        for _kind, x, y, size in legs:
+            near = [cc for cc in centres if (cc.xy - Vector((x, y))).length < size + 1.0]
+            check(len(near) == 1, f"{name}: one connector on the leg at ({x}, {y}) [{len(near)}]")
+        sizes = sorted(c.inscribed for c in rec.contacts)
+        if name == "Mixed":
+            check(
+                sizes[0] < sizes[1] < sizes[2], f"Mixed: each pin sized to its own leg {[round(v, 1) for v in sizes]}"
+            )
+        if name == "Hollow":
+            tube = min(rec.contacts, key=lambda c: (Vector(c.center).xy - Vector((-18, 0))).length)
+            wall = 9 - 9 * 0.55
+            pin_w, _h = plan.contact_size_bu(ctx, rec, tube.inscribed)
+            check(pin_w < wall, f"Hollow: the tube's pin fits its wall ({pin_w:.2f} < {wall:.2f})")
+        res = bpy.ops.esp.build()
+        col = bpy.data.collections.get(s.built_collection)
+        check(res == {'FINISHED'} and col is not None and len(col.objects) == 2, f"{name}: builds into top and feet")
+        if col is None or len(col.objects) != 2:
+            continue
+        top = max(col.objects, key=lambda o: mesh_utils.mesh_centroid(o.data).z)
+        for o in col.objects:
+            non, boundary, _t = mesh_utils.manifold_report(o.data)
+            check(non == 0 and boundary == 0, f"{name}: {o.name} closed manifold")
+        hit, stray = pins_under(top, z - 0.5, legs)
+        check(
+            all(hit) and not stray,
+            f"{name}: a pin under every leg, nowhere else ({sum(hit)}/{expect}, {len(stray)} stray)",
+        )
+    # one region: nothing to split
+    reset_scene()
+    cyl = make_cylinder("Single")
+    one = plane_stroke(cyl, 0.0, -20.0, 20.0)
+    check(plan.split_straight_contact(ctx, cyl, one) == [one], "a single region stays one contact")
+    # the region keeps to its leg when the plane is moved
+    reset_scene()
+    bpy.context.scene.esp.mode = 'PLAN'
+    stool = table("Stool2", [('BOX', x, 0, 10) for x in (-25, 0, 25)])
+    rec = plan.add_record(
+        ctx, stool, 'STRAIGHT', plan.split_straight_contact(ctx, stool, plane_stroke(stool, z, -40, 40))
+    )
+    sobj = bpy.data.objects.get(rec.contacts[0].surface)
+    before = Vector(rec.contacts[0].center)
+    sobj.location.z += 6.0
+    plan.rebuild_surface(sobj, context=ctx, target=stool)
+    pts = [sobj.matrix_world @ v.co for v in sobj.data.vertices]
+    xs = [p.x for p in pts]
+    check(
+        max(xs) - min(xs) < 14.0 and abs(sum(xs) / len(xs) - before.x) < 2.0,
+        "a moved plane re-sections its own leg only",
+    )
 
 
 def test_quick_mode():
@@ -957,6 +1128,7 @@ class FakeStroke:
         self.plane_z = plane_z
         self.bcenter = Vector((0.0, 0.0, plane_z))
         self.contact_hit = hit
+        self.multi = False
         self.data = None
 
     def at_depth(self, p, _center):
@@ -1037,6 +1209,7 @@ if __name__ == "__main__":
     test_multi_contact_cut()
     test_legacy_record_migrates()
     test_tool_collects_any_number_of_contacts()
+    test_one_plane_many_regions()
     test_quick_mode()
     test_quick_plane_section()
     test_printer_fit()

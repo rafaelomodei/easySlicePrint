@@ -14,6 +14,15 @@ All notable changes to this project are documented here. The format follows
   progress drops the last one. In Plan Mode the edit box gets a *Contact* picker that tells
   *Edit Cut Surface* and *Select Connector* which contact to work on (it replaces the *2nd*
   buttons).
+- **One plane, a connector per region.** With *Multiple Contacts* on, a Plane stroke drawn once
+  across separate regions - three legs of a stool, the four legs of a table seen from the side,
+  a hollow leg next to a solid one - makes a contact of each region: its own cut surface, its
+  own connector sized to that region, its own socket. Moving one of those planes later
+  re-sections its own region only. While drawing, the contacts already made are outlined in
+  green where they will cut, and **Ctrl+Z** takes back the whole last stroke, every region it
+  added.
+- `tests/gui_smoke.py` drives the real Blender UI with simulated input (needs a display) and
+  saves screenshots.
 
 ### Changed
 - Cut records keep their contacts in a list. A `.blend` saved by an earlier version is moved

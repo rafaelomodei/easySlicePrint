@@ -531,6 +531,42 @@ def inscribed_circle(verts, faces, normal, resolution=40, refinements=4):
     return best, best_d * 2.0
 
 
+def split_patch(verts, faces):
+    """A flat patch cut into its connected pieces -> [(verts, faces), ...].
+
+    Faces that share a vertex belong together, so each piece is one region the plane
+    crossed: a leg, the wall of a hollow leg (an annulus stays one piece), a wing.
+    """
+    parent = list(range(len(verts)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for f in faces:
+        r = find(f[0])
+        for i in f[1:]:
+            ri = find(i)
+            if ri != r:
+                parent[ri] = r
+    groups = {}
+    for f in faces:
+        groups.setdefault(find(f[0]), []).append(f)
+    out = []
+    for group in groups.values():
+        remap = {}
+        pv = []
+        for f in group:
+            for i in f:
+                if i not in remap:
+                    remap[i] = len(pv)
+                    pv.append(Vector(verts[i]))
+        out.append((pv, [tuple(remap[i] for i in f) for f in group]))
+    return out
+
+
 def section_extent(verts):
     """Longest edge of the section's bounding box - a scale for margins and messages."""
     if not verts:

@@ -184,6 +184,7 @@ class CutToolBase(jobs.JobMixin):
         self.bcenter = (mn + mx) * 0.5
         self.multi = settings.multi_contact  # any number of contacts, Enter to finish
         self.contacts = []
+        self.strokes = []  # how many contacts each stroke added, so Ctrl+Z takes a stroke back
         self.mouse = (0, 0)
         self.reset_stroke()
         self._handle = bpy.types.SpaceView3D.draw_handler_add(self._draw_cb, (context,), 'WINDOW', 'POST_PIXEL')
@@ -280,9 +281,17 @@ class CutToolBase(jobs.JobMixin):
                 if len(pts) >= 2:
                     draw.lines_2d(pts, draw.GREEN, 2.0, closed=data.kind == 'FREEHAND')
             elif data.verts:
-                step = max(1, len(data.verts) // 400)
-                pts = [self.to2d(v) for v in data.verts[::step]]
-                draw.points_2d([p for p in pts if p is not None], draw.GREEN, 3.0)
+                # a plane section: its edges, so each region the plane cuts shows where
+                # it will be cut (seen edge on, a flat section is a line across the leg)
+                pts2 = [self.to2d(v) for v in data.verts]
+                edges = set()
+                for f in data.faces[:2000]:
+                    for k in range(len(f)):
+                        e = (f[k], f[(k + 1) % len(f)])
+                        edges.add(e if e[0] < e[1] else (e[1], e[0]))
+                for i, j in edges:
+                    if pts2[i] is not None and pts2[j] is not None:
+                        draw.lines_2d([pts2[i], pts2[j]], draw.GREEN, 2.5)
             a = self.to2d(data.anchor)
             if a is not None:
                 draw.points_2d([a], draw.WHITE, 8.0)
@@ -299,9 +308,12 @@ class CutToolBase(jobs.JobMixin):
         return self.finish(context)
 
     def drop_contact(self, context):
-        if self.contacts:
-            self.contacts.pop()
-            self.update_status(context)
+        """Take back the last stroke: every contact it made (a plane across three legs makes three)."""
+        if not self.contacts:
+            return
+        n = self.strokes.pop() if self.strokes else 1
+        del self.contacts[-n:]
+        self.update_status(context)
 
     # -- helpers --------------------------------------------------------------
     def view_dir(self, coord):
@@ -367,8 +379,11 @@ class CutToolBase(jobs.JobMixin):
         except Exception:
             pass
 
-    def contact_done(self, context, data):
+    def contact_done(self, context, data, extra=()):
+        """`data` and any `extra` contacts the same stroke made (one per region it crossed)."""
+        self.contacts.extend(extra)
         self.contacts.append(data)
+        self.strokes.append(len(extra) + 1)
         if not self.multi:
             return self.finish(context)
         self.reset_stroke()
@@ -520,6 +535,11 @@ class ESP_OT_cut_straight(CutToolBase, bpy.types.Operator):
             depth_axis = n.cross(u.normalized()).normalized()
             depth = self.model_span(context, sample_segment(p0, p1, 17), c, depth_axis) or self.bbox_span(c, depth_axis)
             data.verts, data.faces = surfaces.rect_patch(c, n, u, half + margin, (depth[0] - margin, depth[1] + margin))
+        if self.multi:
+            # one stroke across several separate regions (three legs): a contact, and so
+            # a connector, for each of them
+            pieces = plan.split_straight_contact(context, self.target, data)
+            return self.contact_done(context, pieces[-1], pieces[:-1])
         return self.contact_done(context, data)
 
     def draw(self, context):

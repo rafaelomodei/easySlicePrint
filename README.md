@@ -176,6 +176,10 @@ into the socket. Connectors must be rigid (no articulated joints).
 # run the headless tests (needs a Blender binary on PATH or in $BLENDER)
 BLENDER=/path/to/blender scripts/run_tests.sh
 
+# drive the real UI (needs a display): the cut tools with simulated mouse / Enter / Ctrl+Z,
+# screenshots and report.json in tmp/gui/
+/path/to/blender --factory-startup --enable-event-simulate --python tests/gui_smoke.py -- tmp/gui
+
 # build the installable zip into dist/ (Blender's own `extension build` + `extension validate`)
 BLENDER=/path/to/blender scripts/build.sh
 

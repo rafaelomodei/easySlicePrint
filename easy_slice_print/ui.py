@@ -89,7 +89,7 @@ class ESP_PT_tools(ESPPanel, bpy.types.Panel):
             layout.label(text="Orbit (MMB) between strokes to reach the far side", icon='INFO')
         layout.prop(s, "multi_contact", toggle=True, icon='MOD_MIRROR')
         if s.multi_contact:
-            layout.label(text="Draw each contact, then Enter to cut them together", icon='INFO')
+            layout.label(text="Draw each contact, then Enter", icon='INFO')
         layout.prop(s, "chain_cuts")
 
 

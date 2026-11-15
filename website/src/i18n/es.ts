@@ -256,7 +256,7 @@ const es: Dict = {
     releases: "Todas las versiones",
     changelog: "Changelog",
     extension: "Blender Extensions",
-    note: "También en la <a href=\"{extensionUrl}\" target=\"_blank\" rel=\"noopener\">plataforma Blender Extensions</a>: en cuanto pase la revisión podrás instalarlo y actualizarlo desde <em>Preferences → Get Extensions</em>.",
+    note: "También en la <a href=\"{extensionUrl}\" target=\"_blank\" rel=\"noopener\">plataforma Blender Extensions</a>: instálalo y actualízalo desde <em>Preferences → Get Extensions</em>.",
     meta: {
       version: "Versión",
       blender: "Blender",
@@ -306,6 +306,12 @@ const es: Dict = {
   support: {
     eyebrow: "Soporte y hoja de ruta",
     title: "En desarrollo activo y a la vista de todos",
+    coffee: {
+      title: "Gratis, y seguirá siéndolo",
+      body: "Si {name} te ahorró una tarde peleando con booleanos, una valoración en Blender Extensions ayuda a otros makers a encontrarlo — y un café ayuda a que salga la próxima versión.",
+      kofi: "Invítame a un café",
+      rate: "Valóralo en Blender Extensions",
+    },
     cards: {
       bug: {
         title: "¿Encontraste un error?",
@@ -334,6 +340,7 @@ const es: Dict = {
       releases: "Versiones",
       extension: "Blender Extensions",
       changelog: "Changelog",
+      kofi: "Invítame a un café",
       license: "Licencia",
     },
     docs: {

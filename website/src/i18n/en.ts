@@ -269,7 +269,7 @@ const en = {
     releases: "All releases",
     changelog: "Changelog",
     extension: "Blender Extensions",
-    note: "Also on the <a href=\"{extensionUrl}\" target=\"_blank\" rel=\"noopener\">Blender Extensions platform</a> — once it clears review you can install and update it straight from <em>Preferences → Get Extensions</em>.",
+    note: "Also on the <a href=\"{extensionUrl}\" target=\"_blank\" rel=\"noopener\">Blender Extensions platform</a>: install and update it straight from <em>Preferences → Get Extensions</em>.",
     meta: {
       version: "Version",
       blender: "Blender",
@@ -319,6 +319,12 @@ const en = {
   support: {
     eyebrow: "Support & roadmap",
     title: "Actively developed, in the open",
+    coffee: {
+      title: "Free, and staying free",
+      body: "If {name} saved you an afternoon of fiddling with booleans, a rating on Blender Extensions helps other makers find it — and a coffee keeps the next release coming.",
+      kofi: "Buy me a coffee",
+      rate: "Rate on Blender Extensions",
+    },
     cards: {
       bug: {
         title: "Found a bug?",
@@ -347,6 +353,7 @@ const en = {
       releases: "Releases",
       extension: "Blender Extensions",
       changelog: "Changelog",
+      kofi: "Buy me a coffee",
       license: "License",
     },
     docs: {

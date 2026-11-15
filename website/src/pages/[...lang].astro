@@ -276,6 +276,21 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
 
   <!-- ============ SUPPORT ============ -->
   <Section id="support" eyebrow={t.support.eyebrow} title={t.support.title}>
+    <div class="card coffee">
+      <div class="coffee-copy">
+        <h3>{t.support.coffee.title}</h3>
+        <p class="muted">{t.support.coffee.body}</p>
+      </div>
+      <div class="coffee-cta">
+        <a class="btn btn-primary" href={site.links.kofi} target="_blank" rel="noopener">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M17 8h1a4 4 0 0 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8zM6 2v3M10 2v3M14 2v3" />
+          </svg>
+          {t.support.coffee.kofi}
+        </a>
+        <a class="btn btn-outline" href={site.links.blenderReviews} target="_blank" rel="noopener">★ {t.support.coffee.rate}</a>
+      </div>
+    </div>
     <div class="grid grid-3">
       <div class="card">
         <h3>{t.support.cards.bug.title}</h3>
@@ -462,13 +477,35 @@ const features = Object.entries(t.features.items) as [keyof typeof featureIcons,
     font-weight: var(--w-strong);
     text-align: right;
   }
-  #support .card {
+  :global(#support) .card {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
   }
-  #support .card .btn {
+  :global(#support) .card .btn {
     margin-top: auto;
+  }
+  :global(#support) .coffee {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem 2.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+  :global(#support) .coffee-copy {
+    flex: 1 1 22rem;
+  }
+  :global(#support) .coffee-copy p {
+    margin-bottom: 0;
+  }
+  :global(#support) .coffee-cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  :global(#support) .coffee .btn {
+    margin-top: 0;
   }
   @media (max-width: 860px) {
     .download-box {

@@ -40,6 +40,7 @@ below is an original implementation; nothing was copied.
 | Pin on side A or B, swap | *Pin Side* + **Swap** | `ESP_OT_swap_pin_side` |
 | Move/rotate/scale the pin manually, reset | **Select Connector** (G/R/S, or the Item panel) / **Reset** | `ESP_OT_select_pin`, `ESP_OT_reset_pin` |
 | Cut gap / kerf in mm | *Cut Gap* (Options; per selected cut in Plan Mode) → kerf slab subtracted before splitting | `surfaces.slab_from_patch` |
+| Each loose piece its own part | *Separate Loose Parts* (Options, on): a base split gives the top and every foot as separate objects; a cavity's inner wall stays with its part | `mesh_utils.part_groups`, `mesh_utils.separate_parts` |
 | Keep the source model | **Keep Original** → hidden in `ESP_Backup` | `plan.move_to_backup` |
 | Continue after a failed cut | **Skip Failed Cuts** | `ESP_OT_build` |
 | See why a cut failed | a cut that leaves the part in one piece paints the cut surface red where the halves stay joined and green where the cut goes through, all red when none of it reaches the model (*Show Why a Cut Failed* to turn it off, **✕** in the sidebar to hide) | `core/diagnosis.py`, `overlay.py`, `ESP_OT_hide_diagnosis` |

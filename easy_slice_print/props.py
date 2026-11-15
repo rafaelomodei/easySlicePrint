@@ -341,6 +341,15 @@ class ESP_Settings(bpy.types.PropertyGroup):
         default=True,
         description="Keep the source model (hidden in the ESP_Backup collection) instead of deleting it",
     )
+    separate_parts: BoolProperty(
+        name="Separate Loose Parts",
+        default=True,
+        description=(
+            "Every piece that comes out loose is a part of its own: a base split across three "
+            "legs gives the top and three feet, not the top and one object holding all three. "
+            "A cavity's inner wall stays with the part around it"
+        ),
+    )
     skip_failed: BoolProperty(
         name="Skip Failed Cuts",
         default=False,

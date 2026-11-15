@@ -225,6 +225,156 @@ def _separate_loose_python(mesh, obj):
     return meshes
 
 
+def _shells(bm):
+    """Face index lists, one per edge-connected shell of `bm`."""
+    bm.faces.ensure_lookup_table()
+    seen = [False] * len(bm.faces)
+    out = []
+    for f in bm.faces:
+        if seen[f.index]:
+            continue
+        seen[f.index] = True
+        stack = [f]
+        comp = []
+        while stack:
+            cf = stack.pop()
+            comp.append(cf.index)
+            for e in cf.edges:
+                for lf in e.link_faces:
+                    if not seen[lf.index]:
+                        seen[lf.index] = True
+                        stack.append(lf)
+        out.append(comp)
+    return out
+
+
+# not along an axis, so a ray from a grid-aligned point does not graze an edge or a face
+_INSIDE_DIR = Vector((0.5773, 0.5779, 0.5767)).normalized()
+
+
+def _crossings(tree, point, limit=10000):
+    """How many times a ray from `point` crosses the surface in `tree` (odd: inside)."""
+    n = 0
+    origin = Vector(point)
+    for _ in range(limit):
+        hit, _nor, _i, _d = tree.ray_cast(origin, _INSIDE_DIR)
+        if hit is None:
+            break
+        n += 1
+        origin = hit + _INSIDE_DIR * 1e-5
+    return n
+
+
+def part_groups(mesh):
+    """Face index groups, one per part that prints on its own.
+
+    Each edge-connected shell is a part, except a shell lying inside another: that is
+    the wall of a cavity, and it belongs to the part around it. Nesting alternates - a
+    shell inside a cavity wall is a loose part again (a ship in a bottle) - so a shell
+    goes with its enclosing shell when it sits an odd number of shells deep.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    try:
+        shells = _shells(bm)
+        if len(shells) < 2:
+            return [sorted(i for comp in shells for i in comp)]
+        trees, boxes, probes = [], [], []
+        for comp in shells:
+            remap, coords, polys = {}, [], []
+            for fi in comp:
+                poly = []
+                for v in bm.faces[fi].verts:
+                    if v.index not in remap:
+                        remap[v.index] = len(coords)
+                        coords.append(v.co.copy())
+                    poly.append(remap[v.index])
+                polys.append(poly)
+            trees.append(BVHTree.FromPolygons(coords, polys))
+            mn = Vector((min(c.x for c in coords), min(c.y for c in coords), min(c.z for c in coords)))
+            mx = Vector((max(c.x for c in coords), max(c.y for c in coords), max(c.z for c in coords)))
+            boxes.append((mn, mx))
+            probes.append(coords[0])
+        n = len(shells)
+
+        def within(j, i):
+            (amn, amx), (bmn, bmx) = boxes[i], boxes[j]
+            if any(bmn[k] < amn[k] or bmx[k] > amx[k] for k in range(3)):
+                return False
+            return _crossings(trees[i], probes[j]) % 2 == 1
+
+        def volume(i):
+            d = boxes[i][1] - boxes[i][0]
+            return d.x * d.y * d.z
+
+        parent = []
+        for j in range(n):
+            around = [i for i in range(n) if i != j and within(j, i)]
+            parent.append(min(around, key=volume) if around else -1)
+
+        def depth(j):
+            d = 0
+            while parent[j] >= 0 and d < n:
+                j = parent[j]
+                d += 1
+            return d
+
+        owner = list(range(n))
+        for j in sorted(range(n), key=depth):
+            if depth(j) % 2 == 1:
+                owner[j] = owner[parent[j]]
+        groups = {}
+        for j, comp in enumerate(shells):
+            groups.setdefault(owner[j], []).extend(comp)
+        return [sorted(g) for g in groups.values()]
+    finally:
+        bm.free()
+
+
+def separate_parts(context, obj):
+    """Split `obj` into one object per part (`part_groups`). -> [obj, new objects...]
+
+    `obj` keeps the first part; the others are copies of it - same collections, same
+    transform, same custom properties - each holding one part's geometry. Sorted along
+    x, then y, then z, so part numbers follow the model from left to right.
+    """
+    groups = part_groups(obj.data)
+    if len(groups) < 2:
+        return [obj]
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    meshes = []
+    try:
+        for g in groups:
+            sub = bm.copy()
+            sub.faces.ensure_lookup_table()
+            keep = set(g)
+            drop = [f for f in sub.faces if f.index not in keep]
+            bmesh.ops.delete(sub, geom=drop, context='FACES')
+            loose = [v for v in sub.verts if not v.link_faces]
+            if loose:
+                bmesh.ops.delete(sub, geom=loose, context='VERTS')
+            meshes.append(bmesh_to_mesh(sub, obj.data.name))
+            sub.free()
+    finally:
+        bm.free()
+    meshes.sort(key=lambda me: tuple(round(c, 4) for c in mesh_centroid(me)))
+    old = obj.data
+    out = []
+    for k, me in enumerate(meshes):
+        if k == 0:
+            obj.data = me
+            target = obj
+        else:
+            target = obj.copy()
+            target.data = me
+            for col in obj.users_collection:
+                col.objects.link(target)
+        out.append(target)
+    remove_mesh(old)
+    return out
+
+
 def join_meshes(meshes, name):
     """Join several meshes into one NEW mesh (inputs are removed)."""
     bm = bmesh.new()

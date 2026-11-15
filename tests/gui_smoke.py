@@ -255,8 +255,8 @@ def scenario_plane_three_legs():
         res = bpy.ops.esp.build()
     yield 0.5
     parts = built_parts()
-    check(res == {'FINISHED'} and len(parts) == 2, f"Build -> {len(parts)} parts")
-    if len(parts) == 2:
+    check(res == {'FINISHED'} and len(parts) == 4, f"Build -> the top and three feet, each a part ({len(parts)})")
+    if len(parts) == 4:
         top = max(parts, key=lambda o: mesh_utils.mesh_centroid(o.data).z)
         hit, stray = pins_under(top, 14.5, legs)
         check(all(hit) and not stray, f"the top carries a pin into every leg ({sum(hit)}/3)")
@@ -299,14 +299,16 @@ def scenario_quick_grid_undo():
         if bpy.data.objects.get("Grid_UPPER"):
             break
     up = bpy.data.objects.get("Grid_UPPER")
-    low = bpy.data.objects.get("Grid_LOWER")
-    check(up is not None and low is not None, "Quick cut made Grid_UPPER / Grid_LOWER")
+    feet = [bpy.data.objects.get(f"Grid_LOWER_{k}") for k in range(1, 5)]
+    check(up is not None and all(feet), "Quick cut made Grid_UPPER and Grid_LOWER_1..4, a part per foot")
     if up is not None:
         hit, stray = pins_under(up, 14.5, legs)
         check(all(hit) and not stray, f"after Ctrl+Z and redraw: a pin in each of the 4 legs ({sum(hit)}/4)")
     front_view(up or obj, persp=True)
     if up is not None:
         up.location.z += 15.0
+    for k, foot in enumerate(f for f in feet if f):
+        foot.location.x += (-1) ** k * 4.0
     with override():
         bpy.ops.view3d.view_all()
     yield 0.5
@@ -340,7 +342,17 @@ def scenario_curve_two_contacts():
     with override():
         res = bpy.ops.esp.build()
     yield 0.5
-    check(res == {'FINISHED'} and len(built_parts()) == 2, f"curve base split builds ({len(built_parts())} parts)")
+    check(all(len(o.data.vertices) for o in built_parts()), "no part comes out empty")
+    if built_parts():
+        front_view(built_parts()[0], persp=True)
+        with override():
+            bpy.ops.view3d.view_all()
+        yield 0.4
+        shot("10b_curve_built")
+    check(
+        res == {'FINISHED'} and len(built_parts()) == 3,
+        f"curve base split: the top and two feet ({len(built_parts())})",
+    )
 
 
 def scenario_panels():

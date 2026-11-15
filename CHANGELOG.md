@@ -21,8 +21,22 @@ All notable changes to this project are documented here. The format follows
   re-sections its own region only. While drawing, the contacts already made are outlined in
   green where they will cut, and **Ctrl+Z** takes back the whole last stroke, every region it
   added.
+- **Separate Loose Parts** (*Options*, on by default). Every piece that comes out loose is a part
+  of its own: a base split across three legs gives the top and three feet - four objects ready
+  for the slicer - instead of the top and one object holding all three feet. A closed shell
+  inside another (the wall of a cavity) stays with the part around it; a piece loose inside a
+  cavity is a part again. In Plan Mode it happens once every cut is done, so a later cut across
+  several feet still reaches them all; in Quick mode a side that comes apart is named
+  `_LOWER_1`, `_LOWER_2` ...
 - `tests/gui_smoke.py` drives the real Blender UI with simulated input (needs a display) and
   saves screenshots.
+
+### Fixed
+- A cut with several contacts that do not share a plane - two curves round two legs, two
+  freehand loops - sorted every piece by the first contact alone: the second leg's foot was
+  measured against the first leg's ribbon, landed on the wrong side, and the build reported
+  success with the model whole and an empty part. Each piece is now judged by the contact
+  surface nearest to it.
 
 ### Changed
 - Cut records keep their contacts in a list. A `.blend` saved by an earlier version is moved

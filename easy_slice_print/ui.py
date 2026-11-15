@@ -193,6 +193,7 @@ class ESP_PT_options(ESPPanel, bpy.types.Panel):
         else:
             layout.prop(src, "cut_gap_mm")
         layout.prop(s, "keep_original")
+        layout.prop(s, "separate_parts")
         col = layout.column()
         col.active = s.mode == 'PLAN'
         col.prop(s, "skip_failed")

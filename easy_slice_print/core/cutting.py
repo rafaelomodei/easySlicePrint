@@ -201,6 +201,22 @@ def estimate_pin_frame(obj, depsgraph, patch_bvh, diag, surface_point=None, thro
 # ----------------------------------------------------------------------------
 # pipeline
 # ----------------------------------------------------------------------------
+def contacts_bvh(contacts):
+    """Every contact's surface in one tree, so each piece is judged by the surface nearest to it.
+
+    Judging every piece by the first contact alone holds only while the contacts share
+    a plane. Two curves round two legs do not: the second leg's foot is measured against
+    the first leg's ribbon, out past its end where the nearest facet says nothing about
+    sides, and the foot lands with the top - or the halves come out wrong altogether.
+    """
+    verts, faces = [], []
+    for c in contacts:
+        base = len(verts)
+        verts.extend(c.verts)
+        faces.extend(tuple(base + i for i in f) for f in c.faces)
+    return mesh_utils.bvh_from_pydata(verts, faces)
+
+
 def split_mesh_steps(context, mesh, spec):
     """Generator form of `split_mesh`.
 
@@ -230,7 +246,7 @@ def split_mesh_steps(context, mesh, spec):
         orphans = mesh_utils.separate_loose_meshes(context, work)
         work = None
         c0 = spec.contacts[0]
-        bvh = mesh_utils.bvh_from_pydata(c0.verts, c0.faces)
+        bvh = contacts_bvh(spec.contacts)
         side_a, side_b = [], []
         for p in orphans:
             (side_a if mesh_side(p, bvh, floor=spec.gap * 0.25) > 0 else side_b).append(p)

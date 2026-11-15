@@ -506,6 +506,9 @@ class ESP_OT_build(jobs.JobMixin, bpy.types.Operator):
             bpy.data.collections.remove(col)
             raise cutting.CutError("Nothing was cut")
         yield "finishing"
+        if s.separate_parts:
+            # after every cut, so a later cut across several feet still reaches them all
+            made = [p for o in made for p in mesh_utils.separate_parts(context, o)]
         numbers = {}
         for o in sorted(made, key=lambda o: o.name):
             stem = o.get("esp_stem", base.name)

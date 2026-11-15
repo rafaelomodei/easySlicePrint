@@ -120,20 +120,23 @@ def quick_cut_steps(context, target, contacts):
     finally:
         plan.restore_visibility(target, state)
     la, lb = cutting.side_labels(mesh_utils.mesh_centroid(a.data), mesh_utils.mesh_centroid(b.data))
-    a.name = f"{target.name}_{la}"
-    b.name = f"{target.name}_{lb}"
-    a.data.name = a.name
-    b.data.name = b.name
-    for o in (a, b):
-        o["esp_base"] = base_name
+    sides = []
+    for half, label in ((a, la), (b, lb)):
+        pieces = mesh_utils.separate_parts(context, half) if settings.separate_parts else [half]
+        for k, o in enumerate(pieces, start=1):
+            o.name = f"{target.name}_{label}" if len(pieces) == 1 else f"{target.name}_{label}_{k}"
+            o.data.name = o.name
+            o["esp_base"] = base_name
+        sides.append(pieces)
+    a, b = sides[0][0], sides[1][0]
     if settings.keep_original:
         plan.move_to_backup(scene, target)
     else:
         mesh_utils.remove_object(target)
     for o in context.view_layer.objects:
         o.select_set(False)
-    a.select_set(True)
-    b.select_set(True)
+    for o in sides[0] + sides[1]:
+        o.select_set(True)
     context.view_layer.objects.active = a
     return a, b, secs
 
@@ -426,8 +429,10 @@ class CutToolBase(jobs.JobMixin):
             self.report({'ERROR'}, str(payload) + failed_note(payload))
             return {'CANCELLED'}
         a, b, secs = payload
-        settings.last_message = f"Cut done in {secs:.2f}s"
-        self.report({'INFO'}, f"Cut completed in {secs:.2f}s: {a.name} / {b.name}. Ctrl+Z to undo.")
+        n = len(context.selected_objects)
+        settings.last_message = f"Cut done in {secs:.2f}s ({n} parts)"
+        names = f"{a.name} / {b.name}" if n == 2 else f"{n} parts"
+        self.report({'INFO'}, f"Cut completed in {secs:.2f}s: {names}. Ctrl+Z to undo.")
         return self.chain_or_finish(context)
 
     # -- overridable ------------------------------------------------------------

@@ -256,7 +256,7 @@ const pt: Dict = {
     releases: "Todas as releases",
     changelog: "Changelog",
     extension: "Blender Extensions",
-    note: "Também na <a href=\"{extensionUrl}\" target=\"_blank\" rel=\"noopener\">plataforma Blender Extensions</a> — assim que passar pela revisão, dá para instalar e atualizar direto pelo <em>Preferences → Get Extensions</em>.",
+    note: "Também na <a href=\"{extensionUrl}\" target=\"_blank\" rel=\"noopener\">plataforma Blender Extensions</a>: instale e atualize direto pelo <em>Preferences → Get Extensions</em>.",
     meta: {
       version: "Versão",
       blender: "Blender",
@@ -306,6 +306,12 @@ const pt: Dict = {
   support: {
     eyebrow: "Suporte e roadmap",
     title: "Desenvolvido ativamente, em aberto",
+    coffee: {
+      title: "Gratuito, e vai continuar assim",
+      body: "Se o {name} te poupou uma tarde brigando com booleanos, uma avaliação no Blender Extensions ajuda outros makers a encontrá-lo — e um café ajuda a próxima versão a sair.",
+      kofi: "Pague um café",
+      rate: "Avalie no Blender Extensions",
+    },
     cards: {
       bug: {
         title: "Achou um bug?",
@@ -334,6 +340,7 @@ const pt: Dict = {
       releases: "Releases",
       extension: "Blender Extensions",
       changelog: "Changelog",
+      kofi: "Pague um café",
       license: "Licença",
     },
     docs: {

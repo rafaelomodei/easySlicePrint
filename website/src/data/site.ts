@@ -25,9 +25,10 @@ export const site = {
   repoUrl,
   links: {
     releases: `${repoUrl}/releases`,
-    // Listing on the Blender Extensions platform. While it is under review the public
-    // page (/add-ons/easy-slice-print/) 404s, so point at the queue entry until then.
-    blenderExtension: "https://extensions.blender.org/approval-queue/easy-slice-print/",
+    // Listing on the Blender Extensions platform, and its reviews tab.
+    blenderExtension: "https://extensions.blender.org/add-ons/easy-slice-print/",
+    blenderReviews: "https://extensions.blender.org/add-ons/easy-slice-print/reviews/",
+    kofi: "https://ko-fi.com/rafaelomodei",
     latestRelease: `${repoUrl}/releases/latest`,
     downloadZip: `${repoUrl}/releases/download/v${version}/easy_slice_print-${version}.zip`,
     issues: `${repoUrl}/issues`,

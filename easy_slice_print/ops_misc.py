@@ -11,7 +11,18 @@ from mathutils import Vector
 from . import plan
 from .core import connectors, mesh_utils
 
-DOCS_URL = "https://github.com/rafaelomodei/easySlicePrint#readme"
+#: Where each help / support button goes: (url, tooltip).
+LINKS = {
+    'DOCS': ("https://github.com/rafaelomodei/easySlicePrint#readme", "Open the EasySlice Print documentation"),
+    'REVIEW': (
+        "https://extensions.blender.org/add-ons/easy-slice-print/reviews/",
+        "Rate EasySlice Print on Blender Extensions - a review helps other people find it",
+    ),
+    'KOFI': (
+        "https://ko-fi.com/rafaelomodei",
+        "Buy the developer a coffee on Ko-fi - EasySlice Print is free and stays free",
+    ),
+}
 
 
 def part_objects(context):
@@ -201,13 +212,22 @@ class ESP_OT_check_mesh(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class ESP_OT_open_docs(bpy.types.Operator):
-    bl_idname = "esp.open_docs"
-    bl_label = "Help"
-    bl_description = "Open the EasySlice Print documentation"
+class ESP_OT_open_link(bpy.types.Operator):
+    bl_idname = "esp.open_link"
+    bl_label = "Open Link"
+    bl_description = "Open an EasySlice Print page in the web browser"
+
+    link: bpy.props.EnumProperty(
+        items=[('DOCS', "Help", ""), ('REVIEW', "Rate", ""), ('KOFI', "Ko-fi", "")],
+        options={'SKIP_SAVE'},
+    )
+
+    @classmethod
+    def description(cls, context, properties):
+        return LINKS[properties.link][1]
 
     def execute(self, context):
-        bpy.ops.wm.url_open(url=DOCS_URL)
+        bpy.ops.wm.url_open(url=LINKS[self.link][0])
         return {'FINISHED'}
 
 
@@ -217,7 +237,7 @@ CLASSES = (
     ESP_OT_export,
     ESP_OT_connector_library,
     ESP_OT_check_mesh,
-    ESP_OT_open_docs,
+    ESP_OT_open_link,
 )
 
 

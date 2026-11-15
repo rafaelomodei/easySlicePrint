@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.3.8-alpha] - 2026-11-14
+
+### Changed
+- **A lighter sidebar.** The stroke tuning sliders (Surface Margin, Smoothing, Control Points,
+  Surface Detail) moved into a collapsed *Stroke Settings* sub-panel under Cut Tools, so the
+  cut buttons are not buried under them. *Surface Origin* and *Cut Gap* moved to *Options*:
+  the gap is the kerf of the cut, not a connector setting, and it is still per selected cut in
+  Plan Mode.
+- **Planned Cuts without the repeats.** The big *New Cut* button, the ✕ on every row and the
+  Name / Ready fields in the edit box did what the +/− column and the list row already do, and
+  are gone.
+- **Check Mesh** has a magnifier icon, so it no longer looks like the ✓ of a built cut.
+
+### Added
+- **Support EasySlice.** A collapsed sub-panel at the bottom of the sidebar (and a box in the
+  add-on preferences) with *Rate on Blender Extensions* and *Buy Me a Coffee (Ko-fi)*. Nothing
+  pops up on its own; the buttons only open the page when clicked.
+
+### Removed
+- The *Manual Connector Adjust* panel: *Select Connector* selects the pin, and Blender's own
+  Item panel and G/R/S move it.
+- Unused internals (`apply_connectors`, `bvh_from_mesh`, `flip_matrix`, `user_moved_pin`); the
+  superseded rim pipeline `clear_of_model` now lives in the test that compares against it.
+
 ## [0.3.7-alpha] - 2026-09-21
 
 ### Changed
@@ -359,7 +385,8 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.7-alpha...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.8-alpha...HEAD
+[0.3.8-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.7-alpha...v0.3.8-alpha
 [0.3.7-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.6-alpha...v0.3.7-alpha
 [0.3.6-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.5-alpha...v0.3.6-alpha
 [0.3.5-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.4-alpha...v0.3.5-alpha

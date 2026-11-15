@@ -64,9 +64,12 @@ class ESP_Preferences(bpy.types.AddonPreferences):
         layout.prop(self, "solver")
         layout.prop(self, "unit_mode")
         layout.prop(self, "check_mesh")
+        from .ui import draw_support
+
         box = layout.box()
         box.label(text="EasySlice Print is free software (GNU GPL v3.0 or later).", icon='INFO')
         box.label(text="Use it, study it, modify it and share it - contributions welcome.")
+        draw_support(box)
 
 
 def register():

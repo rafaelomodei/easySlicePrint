@@ -24,8 +24,6 @@ class ESP_UL_cuts(bpy.types.UIList):
             row.label(text="", icon='CHECKMARK')
         row.prop(item, "enabled", text="")
         row.prop(item, "show", text="", icon='HIDE_OFF' if item.show else 'HIDE_ON', emboss=False)
-        op = row.operator("esp.delete_cut", text="", icon='X', emboss=False)
-        op.index = index
 
 
 class ESPPanel:
@@ -43,8 +41,8 @@ class ESP_PT_main(ESPPanel, bpy.types.Panel):
         s = context.scene.esp
         row = layout.row(align=True)
         row.label(text=f"EasySlice Print {VERSION}", icon='MOD_BOOLEAN')
-        row.operator("esp.check_mesh", text="", icon='CHECKMARK')
-        row.operator("esp.open_docs", text="", icon='QUESTION')
+        row.operator("esp.check_mesh", text="", icon='VIEWZOOM')
+        row.operator("esp.open_link", text="", icon='QUESTION').link = 'DOCS'
         if STAGE:
             layout.label(text=f"{STAGE.capitalize()} - expect bugs, check parts", icon='ERROR')
         col = layout.column(align=True)
@@ -89,10 +87,22 @@ class ESP_PT_tools(ESPPanel, bpy.types.Panel):
         row.operator("esp.cut_freehand", text="Freehand", icon='GREASEPENCIL', depress=s.tool == 'FREEHAND')
         if s.tool == 'FREEHAND':
             layout.label(text="Orbit (MMB) between strokes to reach the far side", icon='INFO')
+        layout.prop(s, "two_contact", toggle=True, icon='MOD_MIRROR')
+        if s.two_contact:
+            layout.label(text="Draw contact 1, then contact 2 with any tool", icon='INFO')
+        layout.prop(s, "chain_cuts")
+
+
+class ESP_PT_stroke(ESPPanel, bpy.types.Panel):
+    bl_label = "Stroke Settings"
+    bl_parent_id = "ESP_PT_tools"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        s = context.scene.esp
         col = layout.column(align=True)
         col.prop(s, "surface_margin", slider=True)
-        if s.mode == 'PLAN':
-            col.prop(s, "surface_origin", text="Origin")
         if s.tool == 'FREEHAND':
             # a traced loop keeps the points it was drawn through: Control Points is a
             # Curve setting, and smoothing is the one knob that rounds a traced detail off
@@ -101,10 +111,6 @@ class ESP_PT_tools(ESPPanel, bpy.types.Panel):
             col.prop(s, "stroke_smoothing", slider=True)
             col.prop(s, "control_points")
         col.prop(s, "surface_detail")
-        layout.prop(s, "two_contact", toggle=True, icon='MOD_MIRROR')
-        if s.two_contact:
-            layout.label(text="Draw contact 1, then contact 2 with any tool", icon='INFO')
-        layout.prop(s, "chain_cuts")
 
 
 def connector_source(context):
@@ -142,7 +148,6 @@ class ESP_PT_connector(ESPPanel, bpy.types.Panel):
         row.prop(src, "pin_side", expand=True)
         if is_record:
             row.operator("esp.swap_pin_side", text="", icon='ARROW_LEFTRIGHT')
-        layout.prop(src, "cut_gap_mm")
 
 
 class ESP_PT_fit(ESPPanel, bpy.types.Panel):
@@ -181,10 +186,17 @@ class ESP_PT_options(ESPPanel, bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         s = context.scene.esp
+        # the kerf belongs to the cut, connector or not: per selected cut in Plan Mode
+        src, is_record = connector_source(context)
+        if is_record:
+            layout.prop(src, "cut_gap_mm", text="Cut Gap (selected cut)")
+        else:
+            layout.prop(src, "cut_gap_mm")
         layout.prop(s, "keep_original")
-        row = layout.row()
-        row.active = s.mode == 'PLAN'
-        row.prop(s, "skip_failed")
+        col = layout.column()
+        col.active = s.mode == 'PLAN'
+        col.prop(s, "skip_failed")
+        col.prop(s, "surface_origin", text="Origin")
         layout.prop(s, "diagnose_failed")
 
 
@@ -223,9 +235,6 @@ class ESP_PT_plan(ESPPanel, bpy.types.Panel):
         col.operator("esp.delete_cut", text="", icon='REMOVE').index = s.active_cut
         col.separator()
         col.operator("esp.refresh_pins", text="", icon='FILE_REFRESH')
-        row = layout.row()
-        row.scale_y = 1.2
-        row.operator("esp.new_cut", text="New Cut", icon='ADD')
         ready = sum(1 for r in s.cuts if r.enabled)
         if s.built:
             layout.label(text=f"Built. {ready} ready cut(s) in the plan.", icon='CHECKMARK')
@@ -234,14 +243,8 @@ class ESP_PT_plan(ESPPanel, bpy.types.Panel):
         rec = active_record(context)
         if rec is not None:
             box = layout.box()
-            box.label(text=f"Edit: {rec.name}", icon='GREASEPENCIL')
-            box.prop(rec, "name")
-            row = box.row(align=True)
-            row.label(
-                text=TYPE_LABEL.get(rec.cut_type, "") + (" (2 contacts)" if rec.two_contact else ""),
-                icon=TYPE_ICON.get(rec.cut_type, 'DOT'),
-            )
-            row.prop(rec, "enabled")
+            kind = TYPE_LABEL.get(rec.cut_type, "") + (", 2 contacts" if rec.two_contact else "")
+            box.label(text=f"Edit: {rec.name} ({kind})", icon=TYPE_ICON.get(rec.cut_type, 'DOT'))
             row = box.row(align=True)
             row.operator("esp.edit_surface", icon='EDITMODE_HLT').index = 0
             if rec.two_contact:
@@ -255,7 +258,7 @@ class ESP_PT_plan(ESPPanel, bpy.types.Panel):
             if rec.two_contact:
                 row.operator("esp.select_pin", text="2nd", icon='RESTRICT_SELECT_OFF').index = 1
             row.operator("esp.reset_pin", text="Reset", icon='LOOP_BACK')
-            box.label(text="Tab into the connector to reshape it; Build follows it", icon='INFO')
+            box.label(text="G/R/S or Tab the selected connector; Build follows it", icon='INFO')
         if s.built:
             row = layout.row(align=True)
             row.scale_y = 1.2
@@ -265,32 +268,6 @@ class ESP_PT_plan(ESPPanel, bpy.types.Panel):
         row.scale_y = 1.2
         row.operator("esp.build", icon='MOD_BUILD')
         row.operator("esp.clear_plan", icon='TRASH')
-
-
-class ESP_PT_pin_adjust(ESPPanel, bpy.types.Panel):
-    bl_label = "Manual Connector Adjust"
-    bl_parent_id = "ESP_PT_plan"
-    bl_options = {'DEFAULT_CLOSED'}
-
-    @classmethod
-    def poll(cls, context):
-        return context.scene.esp.mode == 'PLAN' and active_record(context) is not None
-
-    def draw(self, context):
-        layout = self.layout
-        rec = active_record(context)
-        names = [rec.pin_a] + ([rec.pin_b] if rec.two_contact else [])
-        for i, name in enumerate(names):
-            pin = bpy.data.objects.get(name)
-            if pin is None:
-                layout.label(text="No connector preview", icon='ERROR')
-                continue
-            if len(names) > 1:
-                layout.label(text=f"Contact {i + 1}")
-            col = layout.column(align=True)
-            col.prop(pin, "location")
-            col.prop(pin, "rotation_euler", text="Rotation")
-            col.prop(pin, "scale")
 
 
 class ESP_PT_explode(ESPPanel, bpy.types.Panel):
@@ -306,6 +283,30 @@ class ESP_PT_explode(ESPPanel, bpy.types.Panel):
             layout.operator("esp.collapse", icon='FULLSCREEN_EXIT')
         else:
             layout.operator("esp.explode", icon='FULLSCREEN_ENTER')
+
+
+class ESP_PT_support(ESPPanel, bpy.types.Panel):
+    bl_label = "Support EasySlice"
+    bl_parent_id = "ESP_PT_main"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw_header(self, context):
+        self.layout.label(text="", icon='FUND')
+
+    def draw(self, context):
+        draw_support(self.layout)
+
+
+def draw_support(layout):
+    """Rate + Ko-fi buttons, shared by the sidebar and the add-on preferences."""
+    col = layout.column(align=True)
+    col.label(text="Free and open source. If it saved you time:")
+    row = col.row(align=True)
+    row.scale_y = 1.2
+    row.operator("esp.open_link", text="Rate on Blender Extensions", icon='SOLO_ON').link = 'REVIEW'
+    row = col.row(align=True)
+    row.scale_y = 1.2
+    row.operator("esp.open_link", text="Buy Me a Coffee (Ko-fi)", icon='FUND').link = 'KOFI'
 
 
 class ESP_PT_export(ESPPanel, bpy.types.Panel):
@@ -327,14 +328,15 @@ CLASSES = (
     ESP_UL_cuts,
     ESP_PT_main,
     ESP_PT_tools,
+    ESP_PT_stroke,
     ESP_PT_connector,
     ESP_PT_fit,
     ESP_PT_options,
     ESP_PT_remesh,
     ESP_PT_plan,
-    ESP_PT_pin_adjust,
     ESP_PT_explode,
     ESP_PT_export,
+    ESP_PT_support,
 )
 
 

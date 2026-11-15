@@ -18,7 +18,9 @@ trap 'rm -f "$HERE/easy_slice_print/LICENSE"' EXIT
 
 if command -v "$BLENDER" >/dev/null 2>&1; then
   "$BLENDER" -b --command extension build --source-dir "$HERE/easy_slice_print" --output-dir "$HERE/dist"
-  "$BLENDER" -b --command extension validate "$HERE"/dist/*.zip
+  # validate the zip just built, not every older version left in dist/
+  VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$HERE/easy_slice_print/blender_manifest.toml")"
+  "$BLENDER" -b --command extension validate "$HERE/dist/easy_slice_print-$VERSION.zip"
 else
   echo "Blender not found (set BLENDER=/path/to/blender to use it) - packing with scripts/build_zip.py."
   echo "The zip is installable, but the manifest was not validated by Blender."

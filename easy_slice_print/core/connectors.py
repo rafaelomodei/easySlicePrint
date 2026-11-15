@@ -8,8 +8,6 @@ the socket part, -z is the half embedded in the pin part.
 The final connector is unit_mesh @ Matrix(location, rotation, scale(w, w, h)).
 """
 
-import math
-
 import bmesh
 import bpy
 from mathutils import Matrix, Vector
@@ -183,11 +181,6 @@ def connector_frame(center, protrude_dir, up_hint=None):
 
 def connector_matrix(center, protrude_dir, width_bu, height_bu, up_hint=None):
     return connector_frame(center, protrude_dir, up_hint) @ Matrix.Diagonal((width_bu, width_bu, height_bu, 1.0))
-
-
-def flip_matrix(matrix):
-    """Same location/scale, protrusion direction reversed (rotate 180 deg about local X)."""
-    return matrix @ Matrix.Rotation(math.pi, 4, 'X')
 
 
 # ----------------------------------------------------------------------------

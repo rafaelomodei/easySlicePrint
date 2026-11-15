@@ -300,12 +300,6 @@ def manifold_report(mesh, limit=None):
     return non, boundary, total
 
 
-def bvh_from_mesh(mesh):
-    verts = [v.co.copy() for v in mesh.vertices]
-    polys = [tuple(p.vertices) for p in mesh.polygons]
-    return BVHTree.FromPolygons(verts, polys)
-
-
 def bvh_from_pydata(verts, faces):
     return BVHTree.FromPolygons([Vector(v) for v in verts], [tuple(f) for f in faces])
 

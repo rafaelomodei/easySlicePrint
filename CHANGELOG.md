@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Any number of contacts.** *Two Contacts / Base Split* is now **Multiple Contacts / Base
+  Split**: draw a contact for every foot, leg or tab that holds the figure to its base, then press
+  **Enter** to cut them all as one operation, each with its own connector. The contacts already
+  drawn stay on screen in green while you place the next, and **Ctrl+Z** with no stroke in
+  progress drops the last one. In Plan Mode the edit box gets a *Contact* picker that tells
+  *Edit Cut Surface* and *Select Connector* which contact to work on (it replaces the *2nd*
+  buttons).
+
+### Changed
+- Cut records keep their contacts in a list. A `.blend` saved by an earlier version is moved
+  over when it is opened: its two-contact cuts keep both surfaces, both connectors and any
+  manual connector edits.
+
 ## [0.3.8-alpha] - 2026-11-14
 
 ### Changed

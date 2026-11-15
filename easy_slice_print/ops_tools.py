@@ -182,7 +182,7 @@ class CutToolBase(jobs.JobMixin):
         self.diag = mesh_utils.object_world_diagonal(self.target)
         mn, mx = mesh_utils.object_world_bounds(self.target)
         self.bcenter = (mn + mx) * 0.5
-        self.contacts_needed = 2 if settings.two_contact else 1
+        self.multi = settings.multi_contact  # any number of contacts, Enter to finish
         self.contacts = []
         self.mouse = (0, 0)
         self.reset_stroke()
@@ -242,7 +242,10 @@ class CutToolBase(jobs.JobMixin):
             return {'CANCELLED'}
         result = None
         if event.type in {'RET', 'NUMPAD_ENTER'} and event.value == 'PRESS':
-            result = self.on_confirm(context)
+            if self.multi and self.idle():
+                result = self.finish_contacts(context)
+            else:
+                result = self.on_confirm(context)
         elif event.type == 'LEFTMOUSE':
             if self.nav_drag(context, event):
                 return {'PASS_THROUGH'}
@@ -263,9 +266,42 @@ class CutToolBase(jobs.JobMixin):
         if bpy.context.region is None or bpy.context.region.as_pointer() != self.region.as_pointer():
             return
         try:
+            self.draw_contacts()
             self.draw(context)
         except Exception:
             pass
+
+    def draw_contacts(self):
+        """The contacts already drawn, so the next one is placed against them."""
+        for data in self.contacts:
+            if data.points:
+                pts = [self.to2d(p) for p in data.points]
+                pts = [p for p in pts if p is not None]
+                if len(pts) >= 2:
+                    draw.lines_2d(pts, draw.GREEN, 2.0, closed=data.kind == 'FREEHAND')
+            elif data.verts:
+                step = max(1, len(data.verts) // 400)
+                pts = [self.to2d(v) for v in data.verts[::step]]
+                draw.points_2d([p for p in pts if p is not None], draw.GREEN, 3.0)
+            a = self.to2d(data.anchor)
+            if a is not None:
+                draw.points_2d([a], draw.WHITE, 8.0)
+
+    # -- contacts -------------------------------------------------------------
+    def idle(self):
+        """No stroke in progress: Enter and Ctrl+Z then act on the contacts."""
+        return not (self.drawing or self.start2d is not None or self.stroke or self.loop)
+
+    def finish_contacts(self, context):
+        if not self.contacts:
+            self.report({'WARNING'}, "Draw a contact first")
+            return None
+        return self.finish(context)
+
+    def drop_contact(self, context):
+        if self.contacts:
+            self.contacts.pop()
+            self.update_status(context)
 
     # -- helpers --------------------------------------------------------------
     def view_dir(self, coord):
@@ -316,12 +352,16 @@ class CutToolBase(jobs.JobMixin):
         return min(ts), max(ts)
 
     def contact_label(self):
-        if self.contacts_needed == 1:
+        if not self.multi:
             return ""
-        return f" [contact {len(self.contacts) + 1}/{self.contacts_needed}]"
+        n = len(self.contacts)
+        if not n:
+            return " [contact 1]"
+        return f" [contact {n + 1} - Enter: cut the {n} drawn]"
 
     def update_status(self, context):
-        context.workspace.status_text_set(self.status_text() + "  |  RMB / Esc: cancel  |  MMB: orbit")
+        extra = "  |  Enter (no stroke): finish  |  Ctrl+Z (no stroke): drop last contact" if self.multi else ""
+        context.workspace.status_text_set(self.status_text() + extra + "  |  RMB / Esc: cancel  |  MMB: orbit")
         try:
             self.area.header_text_set(f"EasySlice: {self.header_text()}{self.contact_label()}")
         except Exception:
@@ -329,7 +369,7 @@ class CutToolBase(jobs.JobMixin):
 
     def contact_done(self, context, data):
         self.contacts.append(data)
-        if len(self.contacts) >= self.contacts_needed:
+        if not self.multi:
             return self.finish(context)
         self.reset_stroke()
         self.update_status(context)
@@ -389,6 +429,8 @@ class CutToolBase(jobs.JobMixin):
         return None
 
     def on_key(self, context, event):
+        if self.idle() and (event.type == 'BACK_SPACE' or (event.type == 'Z' and event.ctrl)):
+            self.drop_contact(context)
         return None
 
     def draw(self, context):
@@ -689,7 +731,10 @@ class ESP_OT_cut_freehand(CutToolBase, bpy.types.Operator):
         if event.type == 'C':
             return self.on_confirm(context)
         if event.type == 'BACK_SPACE' or (event.type == 'Z' and event.ctrl):
-            self.undo_stroke(context)
+            if self.loop:
+                self.undo_stroke(context)
+            else:
+                self.drop_contact(context)
         return None
 
     def undo_stroke(self, context):

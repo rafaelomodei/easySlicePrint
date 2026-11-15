@@ -68,7 +68,7 @@
 | **Plane Cut** | drag a line in the viewport → flat cut sized to the line you drew, not to the whole model |
 | **Curve Cut** | draw a curved line over the model → the cut follows the line through the model, reaching just past the stroke |
 | **Freehand Cut** | draw a closed loop *around* the model surface (orbit while drawing) → the loop is filled and used as the cut surface (necks, wrists, anything a plane can't reach) |
-| **Two Contacts / Base Split** | two contacts cut as one operation (e.g. both feet on a base), each with its own connector |
+| **Multiple Contacts / Base Split** | as many contacts as you draw, cut as one operation (e.g. every foot of a figure on its base), each with its own connector — Enter finishes |
 | **Quick Cut mode** | immediate final parts, no history |
 | **Plan mode** | non-destructive: plan several cuts, edit/disable/remove them, move the cut planes and connectors, **Build** when ready, **Back to Plan** to keep editing, **Approve** to finish. The original model is never modified |
 | **Connectors** | automatic pin + socket: Cylinder, Tapered, Hexagon, Box or **custom meshes** from your own connector library; size presets or explicit width/height; clearance; asymmetric tip (deeper socket); choose which side carries the pin; move/rotate/scale the connector freely |
@@ -141,7 +141,7 @@ Tested headless on Blender 4.2.23 LTS and 5.2.1 LTS (CI runs both). Works on Win
      `Enter` / `C` from any angle.
 5. Connector panel: shape, size, pin side, cut gap, and the **Fit** of the printed joint.
 6. **Plan mode**: select a cut in the list to edit it — *Edit Cut Surface* (G/R/S for planes, drag
-   points for curves; a two-contact cut has a *2nd* button for its other contact; each cut surface has its own origin at its centre, so `R` and `S` pivot on the
+   points for curves; a multi-contact cut has a *Contact* picker that chooses which one is edited; each cut surface has its own origin at its centre, so `R` and `S` pivot on the
    surface — set *Surface Origin* to *Target Object* if you would rather they share the model's pivot), *Select Connector* then G/R/S, *Reset*, *Swap* the pin side. Untick **Ready** to
    leave a cut out of the build, the eye hides its preview, ✕ deletes it.
 7. **Build** → parts appear in `ESP_Built_<name>`. **Back to Plan** to change anything, **Approve** to finish.

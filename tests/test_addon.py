@@ -268,7 +268,7 @@ def test_plane_section_preview():
     d.anchor = ref.copy()
     rec = plan.add_record(bpy.context, legs, 'STRAIGHT', [d])
 
-    sobj = bpy.data.objects.get(rec.surface_a)
+    sobj = bpy.data.objects.get(rec.contacts[0].surface)
     check(sobj is not None, "the preview surface was created")
     mn, mx = world_bounds(sobj)
     check(abs((mx.x - mn.x) - 20.2) < 0.6, f"preview is one leg wide, not the whole model ({mx.x - mn.x:.1f} ~ 20)")
@@ -291,7 +291,7 @@ def test_plane_section_preview():
     check(all(abs(v.z - 17.0) < 0.1 for v in cverts), "the quad followed the plane to z=17")
     check(max(v.x for v in cverts) < 5.0, "and still spares the other leg")
 
-    centre = Vector(rec.center_a)
+    centre = Vector(rec.contacts[0].center)
     check(abs(centre.z - 17.0) < 0.5 and centre.x < -10.0, f"the pin followed the section (centre {centre})")
 
 
@@ -444,7 +444,7 @@ def test_freehand_cut_lands_on_the_loop():
     ctx = bpy.context
     plan.add_record(ctx, obj, 'FREEHAND', [freehand_contact(obj)])
     rec = s.cuts[-1]
-    sobj = bpy.data.objects.get(rec.surface_a)
+    sobj = bpy.data.objects.get(rec.contacts[0].surface)
     check(sobj is not None and int(sobj.get("esp_cutter_n", 0)) == 3, "the plan stores the cutter triangulated")
     shown = plan.surface_world_patch(sobj)
     cut_v, cut_f = plan.cutter_world_patch(sobj)
@@ -535,13 +535,14 @@ def test_plan_workflow():
     rec2 = plan.add_record(ctx, obj, 'CURVED', [curve_contact(obj, diag)])
     check(len(s.cuts) == 2 and s.active_cut == 1, "two records added")
     check(
-        bpy.data.objects.get(rec1.surface_a) is not None and bpy.data.objects.get(rec1.pin_a) is not None,
+        bpy.data.objects.get(rec1.contacts[0].surface) is not None
+        and bpy.data.objects.get(rec1.contacts[0].pin) is not None,
         "preview objects exist",
     )
-    check(abs(rec1.inscribed_a - 20.0) < 1.0, f"record inscribed diameter {rec1.inscribed_a:.2f}")
+    check(abs(rec1.contacts[0].inscribed - 20.0) < 1.0, f"record inscribed diameter {rec1.contacts[0].inscribed:.2f}")
     check(abs(rec1.pin_width_mm - 9.0) < 0.5, f"preset width from inscribed: {rec1.pin_width_mm:.2f} mm")
     # change settings on the record -> preview follows
-    pin = bpy.data.objects.get(rec1.pin_a)
+    pin = bpy.data.objects.get(rec1.contacts[0].pin)
     old_scale = pin.scale.copy()
     rec1.size_preset = 'LARGE'
     check(pin.scale.x > old_scale.x, "preset change rescaled the pin preview")
@@ -682,7 +683,7 @@ def test_approve_keeps_unbuilt_cuts():
     upper = parts[1]  # -10 .. 30, where the z=10 cut sits
     check(rec.target == upper.name, f"the kept cut now targets the part under it ({rec.target})")
     check(s.base_object == upper.name, f"the plan is rooted at that part ({s.base_object})")
-    check(bpy.data.objects.get(rec.surface_a) is not None, "its preview surface is still there")
+    check(bpy.data.objects.get(rec.contacts[0].surface) is not None, "its preview surface is still there")
     col = bpy.data.collections.get(plan.PLAN_COLLECTION)
     check(col is not None and not col.hide_viewport, "the plan is visible again")
     check(s.last_message.startswith("Parts approved, 1 unbuilt cut(s) kept"), f"message says so ({s.last_message})")
@@ -712,11 +713,17 @@ def test_two_contact_surfaces_edit_by_points():
     diag = mesh_utils.object_world_diagonal(obj)
     ctx = bpy.context
     rec = plan.add_record(ctx, obj, 'CURVED', [curve_contact(obj, diag), curve_contact(obj, diag, y_end=8.0)])
-    check(rec.two_contact and rec.surface_a and rec.surface_b, "a two-contact curve cut has two surfaces")
+    check(
+        len(rec.contacts) == 2 and rec.contacts[0].surface and rec.contacts[1].surface,
+        "a two-contact curve cut has two surfaces",
+    )
     a, by_pts_a = edit_surface_of(rec, 0)
     b, by_pts_b = edit_surface_of(rec, 1)
-    check(a is not None and a.name == rec.surface_a and by_pts_a, "contact 1 edits by points")
-    check(b is not None and b.name == rec.surface_b and by_pts_b, "contact 2 edits by points, on its own surface")
+    check(a is not None and a.name == rec.contacts[0].surface and by_pts_a, "contact 1 edits by points")
+    check(
+        b is not None and b.name == rec.contacts[1].surface and by_pts_b,
+        "contact 2 edits by points, on its own surface",
+    )
     check(a != b and len(plan.surface_points(b)) == 20, "the second surface carries its own control points")
     draw_all_panels(ctx)
     loop = plan.add_record(ctx, obj, 'FREEHAND', [freehand_contact(obj), freehand_contact(obj, height=-5.0)])
@@ -732,6 +739,185 @@ def test_two_contact_surfaces_edit_by_points():
     sb, _ = edit_surface_of(single, 1)
     check(sa is not None and sb == sa, "a one-contact cut ignores the 2nd index")
     draw_all_panels(ctx)
+
+
+def make_tripod(name="Tripod", xs=(-25.0, 0.0, 25.0)):
+    """Three legs standing on a slab, as one closed mesh: the base split needs a contact per leg."""
+    bm = bmesh.new()
+    for x in xs:
+        bmesh.ops.create_cone(
+            bm,
+            cap_ends=True,
+            cap_tris=True,
+            segments=32,
+            radius1=6,
+            radius2=6,
+            depth=40,
+            matrix=Matrix.Translation((x, 0, 20)),
+        )
+    legs = bpy.data.objects.new("_legs", mesh_utils.bmesh_to_mesh(bm, "_legs"))
+    bm.free()
+    bm2 = bmesh.new()
+    bmesh.ops.create_cube(bm2, size=1.0)
+    bmesh.ops.scale(bm2, vec=(80, 30, 8), verts=bm2.verts)
+    bmesh.ops.translate(bm2, vec=(0, 0, -3.0), verts=bm2.verts)
+    base = bpy.data.objects.new("_base", mesh_utils.bmesh_to_mesh(bm2, "_base"))
+    bm2.free()
+    for o in (legs, base):
+        bpy.context.scene.collection.objects.link(o)
+    me = mesh_utils.boolean_mesh(
+        bpy.context,
+        mesh_utils.world_mesh_copy(bpy.context, legs, "l"),
+        mesh_utils.world_mesh_copy(bpy.context, base, "b"),
+        'UNION',
+        'EXACT',
+    )
+    for o in (legs, base):
+        mesh_utils.remove_object(o)
+    mesh_utils.cleanup_temp(bpy.context.scene)
+    obj = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(obj)
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    bpy.context.view_layer.update()
+    return obj
+
+
+def leg_contact(x, z=8.0):
+    """A small flat contact around the leg at `x`: it reaches no other leg."""
+    d = plan.ContactData('STRAIGHT')
+    d.verts, d.faces = surfaces.plane_patch(Vector((x, 0, z)), Vector((0, 0, 1)), Vector((1, 0, 0)), 18.0)
+    d.view_dir = Vector((-1, 0, 0))
+    d.hit = Vector((x + 6.0, 0, z))
+    d.through = Vector((-1, 0, 0))
+    d.anchor = d.hit.copy()
+    return d
+
+
+def test_multi_contact_cut():
+    """A base split with as many contacts as the figure has feet: three legs, one cut."""
+    print("== multi-contact cut (three legs on a base)")
+    from easy_slice_print.ops_plan import edit_surface_of
+
+    sc = reset_scene()
+    obj = make_tripod()
+    check(mesh_utils.manifold_report(obj.data)[:2] == (0, 0), "tripod is closed manifold")
+    s = sc.esp
+    s.mode = 'PLAN'
+    ctx = bpy.context
+    xs = (-25.0, 0.0, 25.0)
+    rec = plan.add_record(ctx, obj, 'STRAIGHT', [leg_contact(x) for x in xs])
+    check(len(rec.contacts) == 3 and rec.name.startswith("Base Split"), f"one record, three contacts ({rec.name})")
+    tags = [c.surface.rsplit("_", 1)[-1] for c in rec.contacts]
+    check(tags == ["A", "B", "C"], f"contacts tagged A, B, C ({tags})")
+    pins = [bpy.data.objects.get(c.pin) for c in rec.contacts]
+    check(all(p is not None for p in pins), "each contact has its own connector")
+    for x, c in zip(xs, rec.contacts):
+        check(
+            abs(Vector(c.center).x - x) < 3.0,
+            f"connector of the leg at x={x:.0f} sits on it ({Vector(c.center).x:.1f})",
+        )
+    rec.active_contact = 3
+    sobj, _by_points = edit_surface_of(rec, None)
+    check(sobj is not None and sobj.name == rec.contacts[2].surface, "the picked contact is the one edited")
+    res = bpy.ops.esp.select_pin()
+    check(res == {'FINISHED'} and ctx.view_layer.objects.active == pins[2], "Select Connector picks contact 3")
+    rec.active_contact = 9
+    check(rec.active_contact == 3, f"the picker stops at the last contact ({rec.active_contact})")
+    draw_all_panels(ctx)
+    res = bpy.ops.esp.build()
+    col = bpy.data.collections.get(s.built_collection)
+    check(res == {'FINISHED'} and col is not None and len(col.objects) == 2, "build splits the legs from the base")
+    parts = sorted(col.objects, key=lambda o: mesh_utils.mesh_centroid(o.data).z)
+    base, top = parts
+    for o in parts:
+        non, boundary, _t = mesh_utils.manifold_report(o.data)
+        check(non == 0 and boundary == 0, f"{o.name} closed manifold")
+    mn, mx = world_bounds(top)
+    check(mx.x - mn.x > 55, f"the upper part holds all three legs (x {mn.x:.0f}..{mx.x:.0f})")
+    low = [top.matrix_world @ v.co for v in top.data.vertices]
+    low = [p for p in low if p.z < 6.0]
+    for x in xs:
+        check(any(abs(p.x - x) < 4.0 for p in low), f"the leg at x={x:.0f} carries its pin down into the base")
+    _bmn, bmx = world_bounds(base)
+    check(bmx.z < 8.0, f"the base stops at the cut (top z {bmx.z:.2f})")
+    # Quick mode takes the same list
+    from easy_slice_print.ops_tools import quick_cut
+
+    s.mode = 'QUICK'
+    obj2 = make_tripod("Tripod2")
+    a, b, _secs = quick_cut(ctx, obj2, [leg_contact(x) for x in xs])
+    check({a.name, b.name} == {"Tripod2_UPPER", "Tripod2_LOWER"}, f"quick three-contact cut ({a.name}/{b.name})")
+
+
+def test_legacy_record_migrates():
+    """A .blend from before 0.3.9 keeps its two-contact cuts: `*_a` / `*_b` move into the list."""
+    print("== cuts saved with two fixed contacts open as a list")
+    sc = reset_scene()
+    obj = make_tripod()
+    s = sc.esp
+    s.mode = 'PLAN'
+    ctx = bpy.context
+    pair = plan.add_record(ctx, obj, 'STRAIGHT', [leg_contact(-25.0), leg_contact(25.0)])
+    single = plan.add_record(ctx, obj, 'STRAIGHT', [leg_contact(0.0)])
+    want = {}
+    for rec, tags in ((pair, "ab"), (single, "a")):
+        want[rec.name] = [(c.surface, c.pin, tuple(c.center), c.inscribed) for c in rec.contacts]
+        for c, tag in zip(rec.contacts, tags):
+            for base in ("surface", "pin", "pin_auto", "center", "normal", "inscribed"):
+                setattr(rec, f"{base}_{tag}", getattr(c, base))
+        rec.two_contact = len(tags) == 2
+        rec.contacts.clear()
+    path = os.path.join(tempfile.mkdtemp(prefix="esp_legacy_"), "legacy.blend")
+    bpy.ops.wm.save_as_mainfile(filepath=path, check_existing=False)
+    bpy.ops.wm.open_mainfile(filepath=path)
+    s = bpy.context.scene.esp
+    for rec in s.cuts:
+        got = [(c.surface, c.pin, tuple(c.center), c.inscribed) for c in rec.contacts]
+        check(got == want[rec.name], f"'{rec.name}' opens with its {len(want[rec.name])} contact(s)")
+        check(not rec.surface_a and not rec.two_contact, f"'{rec.name}' legacy fields emptied")
+        check(not plan.migrate_record(rec), f"'{rec.name}' migrates only once")
+    draw_all_panels(bpy.context)
+    res = bpy.ops.esp.build()
+    check(res == {'FINISHED'}, "a migrated plan builds")
+
+
+def test_tool_collects_any_number_of_contacts():
+    """The drawing tool: one contact cuts at once; with Multiple Contacts, Enter cuts all drawn."""
+    print("== cut tool contact flow")
+    from easy_slice_print.ops_tools import CutToolBase
+
+    class Tool(CutToolBase):
+        def __init__(self, multi):
+            self.multi = multi
+            self.contacts = []
+            self.finished = None
+            self.reset_stroke()
+
+        def update_status(self, context):
+            pass
+
+        def report(self, _level, _msg):
+            pass
+
+        def finish(self, context):
+            self.finished = list(self.contacts)
+            return {'FINISHED'}
+
+    one = Tool(multi=False)
+    check(one.contact_done(None, "c1") == {'FINISHED'} and one.finished == ["c1"], "single contact cuts at once")
+    many = Tool(multi=True)
+    for c in ("c1", "c2", "c3", "c4"):
+        check(many.contact_done(None, c) is None, f"{c} drawn, the tool waits for more")
+    check(many.idle() and many.finished is None, "nothing cut until Enter")
+    many.drop_contact(None)
+    check(many.contacts == ["c1", "c2", "c3"], "Ctrl+Z with no stroke drops the last contact")
+    many.stroke = [(0, 0), (5, 5)]
+    check(not many.idle(), "a stroke in progress is not idle (Enter / Ctrl+Z act on the stroke)")
+    many.reset_stroke()
+    check(many.finish_contacts(None) == {'FINISHED'} and many.finished == ["c1", "c2", "c3"], "Enter cuts all three")
+    empty = Tool(multi=True)
+    check(empty.finish_contacts(None) is None and empty.finished is None, "Enter with nothing drawn does nothing")
 
 
 def test_quick_mode():
@@ -753,7 +939,7 @@ def test_quick_mode():
     draw_all_panels(bpy.context)
     # two contacts in quick mode with skip of original
     s.keep_original = False
-    s.two_contact = True
+    s.multi_contact = True
     obj2 = make_cylinder("Quick2")
     a, b, secs = quick_cut(bpy.context, obj2, [plane_contact(-20.0, diag), plane_contact(-20.0, diag)])
     check(bpy.data.objects.get("Quick2") is None, "original deleted when Keep Original is off")
@@ -848,6 +1034,9 @@ if __name__ == "__main__":
     test_cut_after_approve()
     test_approve_keeps_unbuilt_cuts()
     test_two_contact_surfaces_edit_by_points()
+    test_multi_contact_cut()
+    test_legacy_record_migrates()
+    test_tool_collects_any_number_of_contacts()
     test_quick_mode()
     test_quick_plane_section()
     test_printer_fit()

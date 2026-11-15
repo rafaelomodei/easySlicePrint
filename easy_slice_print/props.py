@@ -192,6 +192,23 @@ def connector_props(update=None):
     }
 
 
+def _active_contact_update(self, context):
+    n = len(self.contacts)
+    if n and self.active_contact > n:
+        self.active_contact = n
+
+
+class ESP_Contact(bpy.types.PropertyGroup):
+    """One contact of a cut: its own surface, its own connector, cut together with the others."""
+
+    surface: StringProperty()
+    pin: StringProperty()
+    pin_auto: FloatVectorProperty(size=16, default=(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1))
+    center: FloatVectorProperty(size=3)
+    normal: FloatVectorProperty(size=3, default=(0, 0, 1))
+    inscribed: FloatProperty(default=1.0)
+
+
 class ESP_CutRecord(bpy.types.PropertyGroup):
     name: StringProperty(name="Name", default="Cut")
     cut_type: EnumProperty(name="Type", items=TOOL_ITEMS, default='STRAIGHT')
@@ -200,6 +217,16 @@ class ESP_CutRecord(bpy.types.PropertyGroup):
         name="Show", default=True, description="Show the cut preview in the viewport", update=_record_show_update
     )
     target: StringProperty(name="Target", description="Object the cut was drawn on")
+    contacts: CollectionProperty(type=ESP_Contact)
+    active_contact: IntProperty(
+        name="Contact",
+        default=1,
+        min=1,
+        description="Which contact Edit Cut Surface and Select Connector work on",
+        update=_active_contact_update,
+    )
+    # Before 0.3.9 a cut had at most two contacts, stored in the fields below. They are
+    # only read once, by `plan.migrate_record`, to move an older .blend into `contacts`.
     two_contact: BoolProperty(default=False)
     surface_a: StringProperty()
     surface_b: StringProperty()
@@ -297,12 +324,13 @@ class ESP_Settings(bpy.types.PropertyGroup):
         min=1,
         max=12,
     )
-    two_contact: BoolProperty(
-        name="Two Contacts / Base Split",
+    multi_contact: BoolProperty(
+        name="Multiple Contacts / Base Split",
         default=False,
         description=(
-            "Draw two contacts with any cut tool; both are cut together as one operation "
-            "(e.g. two feet on a base). Each contact gets its own connector"
+            "Draw as many contacts as you need with any cut tool, then press Enter: they are cut "
+            "together as one operation (e.g. every foot of a figure on its base). Each contact "
+            "gets its own connector"
         ),
     )
     chain_cuts: BoolProperty(
@@ -363,7 +391,7 @@ class ESP_Settings(bpy.types.PropertyGroup):
 ESP_Settings.__annotations__.update(connector_props(update=_settings_update))
 
 
-CLASSES = (ESP_CutRecord, ESP_Settings)
+CLASSES = (ESP_Contact, ESP_CutRecord, ESP_Settings)
 
 
 def register():

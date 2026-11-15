@@ -18,8 +18,8 @@ class ESP_UL_cuts(bpy.types.UIList):
         row = layout.row(align=True)
         row.label(text="", icon=TYPE_ICON.get(item.cut_type, 'DOT'))
         row.prop(item, "name", text="", emboss=False)
-        if item.two_contact:
-            row.label(text="", icon='MOD_MIRROR')
+        if len(item.contacts) > 1:
+            row.label(text=str(len(item.contacts)), icon='MOD_MIRROR')
         if item.built:
             row.label(text="", icon='CHECKMARK')
         row.prop(item, "enabled", text="")
@@ -87,9 +87,9 @@ class ESP_PT_tools(ESPPanel, bpy.types.Panel):
         row.operator("esp.cut_freehand", text="Freehand", icon='GREASEPENCIL', depress=s.tool == 'FREEHAND')
         if s.tool == 'FREEHAND':
             layout.label(text="Orbit (MMB) between strokes to reach the far side", icon='INFO')
-        layout.prop(s, "two_contact", toggle=True, icon='MOD_MIRROR')
-        if s.two_contact:
-            layout.label(text="Draw contact 1, then contact 2 with any tool", icon='INFO')
+        layout.prop(s, "multi_contact", toggle=True, icon='MOD_MIRROR')
+        if s.multi_contact:
+            layout.label(text="Draw each contact, then Enter to cut them together", icon='INFO')
         layout.prop(s, "chain_cuts")
 
 
@@ -243,20 +243,21 @@ class ESP_PT_plan(ESPPanel, bpy.types.Panel):
         rec = active_record(context)
         if rec is not None:
             box = layout.box()
-            kind = TYPE_LABEL.get(rec.cut_type, "") + (", 2 contacts" if rec.two_contact else "")
+            n = len(rec.contacts)
+            kind = TYPE_LABEL.get(rec.cut_type, "") + (f", {n} contacts" if n > 1 else "")
             box.label(text=f"Edit: {rec.name} ({kind})", icon=TYPE_ICON.get(rec.cut_type, 'DOT'))
+            if n > 1:
+                row = box.row(align=True)
+                row.prop(rec, "active_contact")
+                row.label(text=f"of {n}")
             row = box.row(align=True)
-            row.operator("esp.edit_surface", icon='EDITMODE_HLT').index = 0
-            if rec.two_contact:
-                row.operator("esp.edit_surface", text="2nd", icon='EDITMODE_HLT').index = 1
+            row.operator("esp.edit_surface", icon='EDITMODE_HLT').index = -1
             if rec.cut_type == 'STRAIGHT':
                 box.label(text="G move, R rotate, S scale the plane", icon='INFO')
             else:
                 box.label(text="Drag points; G slides the whole cut", icon='INFO')
             row = box.row(align=True)
-            row.operator("esp.select_pin", text="Select Connector", icon='RESTRICT_SELECT_OFF').index = 0
-            if rec.two_contact:
-                row.operator("esp.select_pin", text="2nd", icon='RESTRICT_SELECT_OFF').index = 1
+            row.operator("esp.select_pin", text="Select Connector", icon='RESTRICT_SELECT_OFF').index = -1
             row.operator("esp.reset_pin", text="Reset", icon='LOOP_BACK')
             box.label(text="G/R/S or Tab the selected connector; Build follows it", icon='INFO')
         if s.built:

@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.8-alpha] - 2026-11-14
+
 ### Changed
 - **A lighter sidebar.** The stroke tuning sliders (Surface Margin, Smoothing, Control Points,
   Surface Detail) moved into a collapsed *Stroke Settings* sub-panel under Cut Tools, so the
@@ -383,7 +385,8 @@ All notable changes to this project are documented here. The format follows
 - Headless test-suite and CI for Blender 4.2 LTS and 5.2 LTS.
 - Released as free software under the GNU GPL v3.0 or later.
 
-[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.7-alpha...HEAD
+[Unreleased]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.8-alpha...HEAD
+[0.3.8-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.7-alpha...v0.3.8-alpha
 [0.3.7-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.6-alpha...v0.3.7-alpha
 [0.3.6-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.5-alpha...v0.3.6-alpha
 [0.3.5-alpha]: https://github.com/rafaelomodei/easySlicePrint/compare/v0.3.4-alpha...v0.3.5-alpha
